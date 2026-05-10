@@ -17,6 +17,17 @@ namespace SailwindVirtualCrew
         {
             Winch        = winch;
             TargetLength = Mathf.Clamp01(targetLength);
+
+            // Check for reverse reefing
+            if (winch.rope is RopeControllerSailReef)
+            {
+                var controller = (RopeControllerSailReef)winch.rope;
+
+                if (controller.reverseReefing) 
+                {
+                    TargetLength = 1 - targetLength;
+                }
+            }
         }
 
         public void RecordStart() => StartLength = Winch.rope.currentLength;

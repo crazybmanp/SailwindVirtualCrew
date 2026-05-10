@@ -2,11 +2,12 @@
 using BepInEx.Configuration;
 using HarmonyLib;
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
-using System.Collections.Generic;
-using System.Collections;
-using System.Linq;
+using UnityEngine.Diagnostics;
 
 namespace SailwindVirtualCrew
 {
@@ -15,7 +16,7 @@ namespace SailwindVirtualCrew
     {
         public const string PLUGIN_ID = "com.zorkinian.virtualcrew";
         public const string PLUGIN_NAME = "VirtualCrew";
-        public const string PLUGIN_VERSION = "0.0.3";
+        public const string PLUGIN_VERSION = "0.0.4";
 
         //--settings--
         internal static ConfigEntry<bool> exampleSetting;
@@ -76,207 +77,264 @@ namespace SailwindVirtualCrew
 
         private void Update()
         {
-                tickTimer += Time.deltaTime;
-                if (tickTimer >= tickInterval)
+            tickTimer += Time.deltaTime;
+            if (tickTimer >= tickInterval)
+            {
+                tickTimer -= tickInterval;
+                VirtualCrewManager.Instance.Tick();
+            }
+
+            VirtualCrewManager.Instance.TrimTick();
+
+            if (BuildShipMap.Value.IsDown())
+            {
+            Console.WriteLine("====================");
+            Console.WriteLine("Building ship map!");
+            Console.WriteLine("====================");
+            // Ok, now to learn about iteration. Grab each mast, get all sails on mast, give them a name, spray output.
+            string vesselKey = GameState.currentBoat.name.Replace("(Clone)", "").Trim();
+                VirtualCrewManager.Instance.SetCurrentVessel(vesselKey);
+                VirtualCrewManager.Instance.Reset();
+
+                GPButtonRopeWinch[] winches = GameState.currentBoat.GetComponentsInChildren<GPButtonRopeWinch>();
+                // Build a dictionary of all winches by rope controller
+                var winchDictionary = new Dictionary<RopeController, GPButtonRopeWinch>();
+                foreach (GPButtonRopeWinch winch in winches)
                 {
-                    tickTimer -= tickInterval;
-                    VirtualCrewManager.Instance.Tick();
+                    if (winch.rope == null) continue;
+                    winchDictionary.Add(winch.rope, winch);
                 }
 
-                VirtualCrewManager.Instance.TrimTick();
 
-                if (BuildShipMap.Value.IsDown())
+                Mast[] mastList = GameState.currentBoat.GetComponentsInChildren<Mast>();
+
+                var mastNameDictionary = new Dictionary<string, Mast>();
+
+                Console.WriteLine("Found the following masts:");
+                foreach (Mast mast in mastList)
                 {
-                    // Ok, now to learn about iteration. Grab each mast, get all sails on mast, give them a name, spray output.
-                    string vesselKey = GameState.currentBoat.name.Replace("(Clone)", "").Trim();
-                    VirtualCrewManager.Instance.SetCurrentVessel(vesselKey);
-                    VirtualCrewManager.Instance.Reset();
+                    Console.WriteLine("-" + mast.name);
+                    mastNameDictionary.Add(mast.name, mast);
+                }
+                Console.WriteLine("-------------------------------------------");
 
-                    GPButtonRopeWinch[] winches = GameState.currentBoat.GetComponentsInChildren<GPButtonRopeWinch>();
-                    // Build a dictionary of all winches by rope controller
-                    var winchDictionary = new Dictionary<RopeController, GPButtonRopeWinch>();
-                    foreach (GPButtonRopeWinch winch in winches)
+                foreach (Mast mast in mastList)
+                {
+                    if (mast.name.Contains("_extension"))
                     {
-                        if (winch.rope == null) continue;
-                        winchDictionary.Add(winch.rope, winch);
+                        Console.WriteLine("This is an extension mast; it will be processed with its primary mast.");
+                        continue;
                     }
 
+                    Console.WriteLine("Processing mast:" + mast.name);
+                    Sail[] sails = mast.GetComponentsInChildren<Sail>(); //get all the sails attached to said mast
 
-                    Mast[] mastList = GameState.currentBoat.GetComponentsInChildren<Mast>();
-                    foreach (Mast mast in mastList)
+                    Console.WriteLine("Mast has the following sails:");
+                    foreach (Sail sail in sails)
                     {
-                        Sail[] sails = mast.GetComponentsInChildren<Sail>(); //get all the sails attached to said mast
+                        Console.WriteLine("-" + sail.name);
+                    }
 
-                        List<Sail> deferredSquares = new List<Sail>();
-                        RopeController portRopeControllerForSquares = null;
-                        RopeController starboardRopeControllerForSquares = null;
-
-
-                        foreach (Sail sail in sails) {
-                            Console.WriteLine(string.Format("Mast: {0}, Sail: {1}", mast.name, sail.name));
-
-                            GPButtonRopeWinch halyardCandidate = null;
-                            GPButtonRopeWinch sheetCandidate = null;
-                            GPButtonRopeWinch portSheetCandidate = null;
-                            GPButtonRopeWinch starboardSheetCandidate = null;
-
-                            SailConnections connections = sail.GetComponent<SailConnections>();
-
-                            // Add sail to map
-                            if ((sail.name.Contains("lateen") || sail.name.Contains("gaff")))
-                            {
-                                Console.WriteLine("Attempting to add lateen or gaff");
-                                halyardCandidate = winchDictionary[connections.reefController];
-                                sheetCandidate = winchDictionary[connections.angleControllerMid];
-
-                                SimpleSail lateen = new SimpleSail(sail, halyardCandidate, sheetCandidate, mast.name);
-                                VirtualCrewManager.Instance.addSail(lateen);
-                                Console.WriteLine("Successfully added sail to map:" + sail.name);
-                            }
-                            else if (sail.name.Contains("square"))
-                            {
-                                Console.WriteLine("Attempting to add square sail");
-                                
-
-                                if (!winchDictionary.Keys.Contains(connections.angleControllerLeft))
-                                {
-                                    // This is one of those squares that is ganged to another square. We need to find the rope controller for that square.
-                                    Console.WriteLine("This is a deferred square sail");
-                                    deferredSquares.Add(sail);
-                                }
-                                else {
-                                    halyardCandidate = winchDictionary[connections.reefController];
-                                    Console.WriteLine("Got halyard winch:" + halyardCandidate.name);
-                                    portRopeControllerForSquares = connections.angleControllerLeft;
-                                    Console.WriteLine("Got port rope controller:" + portRopeControllerForSquares.name);
-                                    starboardRopeControllerForSquares = connections.angleControllerRight;
-                                    Console.WriteLine("Got starboard rope controller:" + starboardRopeControllerForSquares.name);
-
-                                    portSheetCandidate = winchDictionary[portRopeControllerForSquares];
-                                    Console.WriteLine("Got port sheet winch:" + portSheetCandidate.name);
-                                    starboardSheetCandidate = winchDictionary[starboardRopeControllerForSquares];
-                                    Console.WriteLine("Got starboard sheet winch:" + starboardSheetCandidate.name);
-
-                                    DualSheetSail dual = new DualSheetSail(sail, halyardCandidate, portSheetCandidate, starboardSheetCandidate, DualSheetSail.DualSheetSailSubtype.Square, mast.name);
-                                    VirtualCrewManager.Instance.addSquareSail(dual);
-                                    Console.WriteLine("Successfully added sail to map:" + sail.name);
-                                }
-                            }
-                            else if (sail.name.Contains("jib")) {
-                                Console.WriteLine("Attempting to add jib sail");
-                                halyardCandidate = winchDictionary[connections.reefController];
-                                portSheetCandidate = winchDictionary[connections.angleControllerLeft];
-                                starboardSheetCandidate = winchDictionary[connections.angleControllerRight];
-
-                                DualSheetSail dual = new DualSheetSail(sail, halyardCandidate, portSheetCandidate, starboardSheetCandidate, DualSheetSail.DualSheetSailSubtype.Jib, mast.name);
-                                VirtualCrewManager.Instance.addDualSheetSail(dual);
-                                Console.WriteLine("Successfully added sail to map:" + sail.name);
-                            }                            
-                            else {
-                                Console.WriteLine("Could not assemble sail and winches for sail:" + sail.name);
-                            }
-
-                        }
-
-                        foreach (Sail deferredSquareSail in deferredSquares)
+                    // There are some cases where a mast is just an "Extension" of another mast. We need
+                    // to treat it as though it's part of the main mast.
+                    string possibleExtensionName = mast.name + "_extension"; 
+                    if (mastNameDictionary.ContainsKey(possibleExtensionName))
+                    {
+                        Console.WriteLine("Mast also has an extension. Adding those sails to be processed.");
+                        var extensionSails = mastNameDictionary[possibleExtensionName].GetComponentsInChildren<Sail>();
+                        foreach (Sail sail in extensionSails)
                         {
-                            Console.WriteLine("Attempting to add deferred square sail");
-                            SailConnections connections = deferredSquareSail.GetComponent<SailConnections>();
-                            var portSheetCandidate = winchDictionary[portRopeControllerForSquares];
-                            var starboardSheetCandidate = winchDictionary[starboardRopeControllerForSquares];
-                            var halyardCandidate = winchDictionary[connections.reefController];
-
-                            DualSheetSail dual = new DualSheetSail(deferredSquareSail, halyardCandidate, portSheetCandidate, starboardSheetCandidate, DualSheetSail.DualSheetSailSubtype.Square, mast.name);
-                            VirtualCrewManager.Instance.addSquareSail(dual);
-                            Console.WriteLine("Successfully added deferred Square sail to map:" + deferredSquareSail.name);
+                            Console.WriteLine("-" + sail.name);
                         }
+
+                        sails = sails.AddRangeToArray(extensionSails);
                     }
 
-                    // Now I need to get all the winches. Every boat has a billion of them lying dormant for crazy sail configurations,
-                    // so I need to only get a list of the ones that the player can interact with. Going to a bit of trial and error here.
-                    // First thought - get all winches on the vessel, see what sails they indirectly reference?
+                    List<Sail> deferredSquares = new List<Sail>();
+                    RopeController portRopeControllerForSquares = null;
+                    RopeController starboardRopeControllerForSquares = null;
+
+                    foreach (Sail sail in sails) {
+                        Console.WriteLine(string.Format("Processing the combination of Mast: {0}, Sail: {1}", mast.name, sail.name));
+
+                        GPButtonRopeWinch halyardCandidate = null;
+                        GPButtonRopeWinch sheetCandidate = null;
+                        GPButtonRopeWinch portSheetCandidate = null;
+                        GPButtonRopeWinch starboardSheetCandidate = null;
+
+                        SailConnections connections = sail.GetComponent<SailConnections>();
+
+                        // Add sail to map
+                        if ((sail.name.Contains("lateen") || sail.name.Contains("gaff")))
+                        {
+                            Console.WriteLine("Attempting to add lateen or gaff");
+                            halyardCandidate = winchDictionary[connections.reefController];
+                            sheetCandidate = winchDictionary[connections.angleControllerMid];
+
+                            SimpleSail lateen = new SimpleSail(sail, halyardCandidate, sheetCandidate, mast.name);
+                            VirtualCrewManager.Instance.addSail(lateen);
+                            Console.WriteLine("Successfully added sail to map:" + sail.name);
+                            Console.WriteLine("---");
+                        }
+                        else if (sail.name.Contains("square"))
+                        {
+                            Console.WriteLine("Attempting to add square sail");
+
+                            if (!winchDictionary.Keys.Contains(connections.angleControllerLeft))
+                            {
+                                // This is one of those squares that is ganged to another square. We need to find the rope controller for that square.
+                                Console.WriteLine("This is a deferred square sail");
+                                deferredSquares.Add(sail);
+                            }
+                            else {
+                                Console.WriteLine("This is a primary square sail");
+                                halyardCandidate = winchDictionary[connections.reefController];
+                                Console.WriteLine("Got halyard winch:" + halyardCandidate.name);
+                                portRopeControllerForSquares = connections.angleControllerLeft;
+                                Console.WriteLine("Got port rope controller:" + portRopeControllerForSquares.name);
+                                starboardRopeControllerForSquares = connections.angleControllerRight;
+                                Console.WriteLine("Got starboard rope controller:" + starboardRopeControllerForSquares.name);
+
+                                portSheetCandidate = winchDictionary[portRopeControllerForSquares];
+                                Console.WriteLine("Got port sheet winch:" + portSheetCandidate.name);
+                                starboardSheetCandidate = winchDictionary[starboardRopeControllerForSquares];
+                                Console.WriteLine("Got starboard sheet winch:" + starboardSheetCandidate.name);
+
+                                DualSheetSail dual = new DualSheetSail(sail, halyardCandidate, portSheetCandidate, starboardSheetCandidate, DualSheetSail.DualSheetSailSubtype.Square, mast.name);
+                                VirtualCrewManager.Instance.addSquareSail(dual);
+                                Console.WriteLine("Successfully added sail to map:" + sail.name);
+                                Console.WriteLine("---");
+                            }
+                        }
+                        else if (sail.name.Contains("jib")) {
+                            Console.WriteLine("Attempting to add jib sail");
+                            halyardCandidate = winchDictionary[connections.reefController];
+                            portSheetCandidate = winchDictionary[connections.angleControllerLeft];
+                            starboardSheetCandidate = winchDictionary[connections.angleControllerRight];
+
+                            DualSheetSail dual = new DualSheetSail(sail, halyardCandidate, portSheetCandidate, starboardSheetCandidate, DualSheetSail.DualSheetSailSubtype.Jib, mast.name);
+                            VirtualCrewManager.Instance.addDualSheetSail(dual);
+                            Console.WriteLine("Successfully added sail to map:" + sail.name);
+                        }                            
+                        else {
+                            Console.WriteLine("Could not assemble sail and winches for sail:" + sail.name);
+                        }
+
+                    }
+
+                    Console.WriteLine("All sails on this mast have been first-pass-processed.");
+                    if (deferredSquares.Count > 0)
+                    {
+                        Console.WriteLine("There are " + deferredSquares.Count + " deferred squares that need to be second-pass-processed.");
+                    }
+
+                    foreach (Sail deferredSquareSail in deferredSquares)
+                    {
+                        Console.WriteLine("Attempting to add deferred square sail:" + deferredSquareSail.name);
+                        SailConnections connections = deferredSquareSail.GetComponent<SailConnections>();
+                        
+                        if (portRopeControllerForSquares == null || starboardRopeControllerForSquares == null)
+                        {
+                            Console.WriteLine("WARNING: We never found a primary square on this mast. Square cannot be added");
+                            continue;
+                        }
+                        var portSheetCandidate = winchDictionary[portRopeControllerForSquares];
+                        var starboardSheetCandidate = winchDictionary[starboardRopeControllerForSquares];
+
+                        var halyardCandidate = winchDictionary[connections.reefController];
+                        DualSheetSail dual = new DualSheetSail(deferredSquareSail, halyardCandidate, portSheetCandidate, starboardSheetCandidate, DualSheetSail.DualSheetSailSubtype.Square, mast.name);
+                        VirtualCrewManager.Instance.addSquareSail(dual);
+                        Console.WriteLine("Successfully added deferred Square sail to map:" + deferredSquareSail.name);
+                    }
+
+                    Console.WriteLine("-------------------------------------------");
                 }
 
-                if (DeployAllSail.Value.IsDown())
-                {
-                    Console.WriteLine("Deploying all sail");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.deployAllSails();
-                }
+                // Now I need to get all the winches. Every boat has a billion of them lying dormant for crazy sail configurations,
+                // so I need to only get a list of the ones that the player can interact with. Going to a bit of trial and error here.
+                // First thought - get all winches on the vessel, see what sails they indirectly reference?
+            }
 
-                if (ReefAllSail.Value.IsDown())
-                {
-                    Console.WriteLine("Reef all sail");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.reefAllSails();
-                }
+            if (DeployAllSail.Value.IsDown())
+            {
+                Console.WriteLine("Deploying all sail");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.deployAllSails();
+            }
 
-                if (EaseAllSail.Value.IsDown())
-                {
-                    Console.WriteLine("Ease all sail");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.easeAllSails();
-                }
+            if (ReefAllSail.Value.IsDown())
+            {
+                Console.WriteLine("Reef all sail");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.reefAllSails();
+            }
 
-                if (TrimAllSail.Value.IsDown())
-                {
-                    Console.WriteLine("Trim all sail");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.trimAllSails();
-                }
+            if (EaseAllSail.Value.IsDown())
+            {
+                Console.WriteLine("Ease all sail");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.easeAllSails();
+            }
 
-                if (BringToPort.Value.IsDown())
-                {
-                    Console.WriteLine("Bring to port");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.bringToPort();
-                }
+            if (TrimAllSail.Value.IsDown())
+            {
+                Console.WriteLine("Trim all sail");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.trimAllSails();
+            }
 
-                if (BringToStarboard.Value.IsDown())
-                {
-                    Console.WriteLine("Bring to starboard");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.bringToStarboard();
-                }
+            if (BringToPort.Value.IsDown())
+            {
+                Console.WriteLine("Bring to port");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.bringToPort();
+            }
 
-                if (DeploySquares.Value.IsDown())
-                {
-                    Console.WriteLine("Deploy squares");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.deploySquares();
-                }
+            if (BringToStarboard.Value.IsDown())
+            {
+                Console.WriteLine("Bring to starboard");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.bringToStarboard();
+            }
 
-                if (ReefSquares.Value.IsDown())
-                {
-                    Console.WriteLine("Reef squares");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.reefSquares();
-                }
+            if (DeploySquares.Value.IsDown())
+            {
+                Console.WriteLine("Deploy squares");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.deploySquares();
+            }
 
-                if (DeployOthers.Value.IsDown())
-                {
-                    Console.WriteLine("Deploy others");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.deployOthers();
-                }
+            if (ReefSquares.Value.IsDown())
+            {
+                Console.WriteLine("Reef squares");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.reefSquares();
+            }
 
-                if (ReefOthers.Value.IsDown())
-                {
-                    Console.WriteLine("Reef others");
-                    VirtualCrewManager.Instance.isCrewActive = true;
-                    VirtualCrewManager.Instance.reefOthers();
-                }
+            if (DeployOthers.Value.IsDown())
+            {
+                Console.WriteLine("Deploy others");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.deployOthers();
+            }
 
-                // If we release any buttons, stop automating the ship
-                if (DeployAllSail.Value.IsUp() || ReefAllSail.Value.IsUp() 
-                 || EaseAllSail.Value.IsUp() || TrimAllSail.Value.IsUp() 
-                 || BringToPort.Value.IsUp() || BringToStarboard.Value.IsUp()
-                    || DeploySquares.Value.IsUp() || ReefSquares.Value.IsUp()
-                    || DeployOthers.Value.IsUp() || ReefOthers.Value.IsUp())
-                {
-                    VirtualCrewManager.Instance.isCrewActive = false;
-                    VirtualCrewManager.Instance.stop();
-                }
+            if (ReefOthers.Value.IsDown())
+            {
+                Console.WriteLine("Reef others");
+                VirtualCrewManager.Instance.isCrewActive = true;
+                VirtualCrewManager.Instance.reefOthers();
+            }
+
+            // If we release any buttons, stop automating the ship
+            if (DeployAllSail.Value.IsUp() || ReefAllSail.Value.IsUp() 
+                || EaseAllSail.Value.IsUp() || TrimAllSail.Value.IsUp() 
+                || BringToPort.Value.IsUp() || BringToStarboard.Value.IsUp()
+                || DeploySquares.Value.IsUp() || ReefSquares.Value.IsUp()
+                || DeployOthers.Value.IsUp() || ReefOthers.Value.IsUp())
+            {
+                VirtualCrewManager.Instance.isCrewActive = false;
+                VirtualCrewManager.Instance.stop();
+            }
         }
 
         private static T GetPrivateField<T>(object obj, string fieldName)

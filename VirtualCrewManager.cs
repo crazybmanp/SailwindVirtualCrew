@@ -240,7 +240,7 @@ namespace SailwindVirtualCrew
 
         public void addSail(SimpleSail sail)
         {
-            Console.WriteLine(string.Format("Adding Sail:{0}, Halyard:{1}, Sheet:{2}",
+            Console.WriteLine(string.Format("Finalizing Sail:{0}, with Halyard:{1}, Sheet:{2}",
                 sail.getRealSail().name, sail.getHalyardWinch().name, sail.getSheetWinch().name));
             RestoreFriendlyName(sail);
             simpleSails.Add(sail);
@@ -249,7 +249,7 @@ namespace SailwindVirtualCrew
 
         public void addDualSheetSail(DualSheetSail sail)
         {
-            Console.WriteLine(string.Format("Adding Sail:{0}, Halyard:{1}, PortSheet:{2}, StarboardSheet:{3}",
+            Console.WriteLine(string.Format("Finalizing Sail:{0}, with Halyard:{1}, PortSheet:{2}, StarboardSheet:{3}",
                 sail.getRealSail().name, sail.getHalyardWinch().name, sail.getPortSheetWinch().name, sail.getStarboardSheetWinch().name));
             RestoreFriendlyName(sail);
             dualSheetSails.Add(sail);
@@ -258,7 +258,7 @@ namespace SailwindVirtualCrew
 
         public void addSquareSail(DualSheetSail sail)
         {
-            Console.WriteLine(string.Format("Adding Square Sail:{0}, Halyard:{1}, PortSheet:{2}, StarboardSheet:{3}",
+            Console.WriteLine(string.Format("Finalizing Square Sail:{0}, with Halyard:{1}, PortSheet:{2}, StarboardSheet:{3}",
                 sail.getRealSail().name, sail.getHalyardWinch().name, sail.getPortSheetWinch().name, sail.getStarboardSheetWinch().name));
             RestoreFriendlyName(sail);
             squareSails.Add(sail);
