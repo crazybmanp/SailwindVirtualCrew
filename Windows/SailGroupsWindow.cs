@@ -1,0 +1,283 @@
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+namespace SailwindVirtualCrew
+{
+    public class SailGroupsWindow : MonoBehaviour
+    {
+        private bool showWindow = false;
+        private Rect windowRect = new Rect(440, 20, 400, 560);
+        private static readonly int windowId = "VirtualCrewSailGroupsWindow".GetHashCode();
+
+        private string groupNameBuffer = "";
+
+        private const float ButtonHeight      = 22f;
+        private const float BaseContentHeight = 300f;
+
+        private void Update()
+        {
+            if (Plugin.ToggleCrewWindow.Value.IsDown())
+                showWindow = !showWindow;
+        }
+
+        private void OnGUI()
+        {
+            if (!showWindow) return;
+
+            var manager       = VirtualCrewManager.Instance;
+            var sails         = manager.AllSails;
+            var selectedGroup = manager.SelectedGroup;
+
+            if (selectedGroup != null && !manager.SailGroups.Contains(selectedGroup))
+            {
+                manager.SelectedGroup = null;
+                selectedGroup         = null;
+                groupNameBuffer       = "";
+            }
+
+            // Height accounting
+            float contentHeight = ButtonHeight; // header row
+            contentHeight += manager.SailGroups.Count * ButtonHeight;
+            if (selectedGroup != null)
+            {
+                contentHeight += 2f + ButtonHeight; // Space(2) + rename row
+                var caps = selectedGroup.GetCommonCapabilities(sails);
+                if (caps.HasFlag(SailCapability.Halyard))          contentHeight += 2 * ButtonHeight;
+                if (caps.HasFlag(SailCapability.SimpleSheet))       contentHeight += 3 * ButtonHeight;
+                else if (caps.HasFlag(SailCapability.SquareSheet))  contentHeight += 2 * ButtonHeight;
+                else if (caps.HasFlag(SailCapability.JibSheet))     contentHeight += 4 * ButtonHeight;
+                if (caps.HasFlag(SailCapability.Trim))              contentHeight += ButtonHeight;
+            }
+
+            windowRect.height = BaseContentHeight + contentHeight;
+            windowRect = GUI.Window(windowId, windowRect, DrawWindow, "Sail Groups");
+        }
+
+        private void DrawWindow(int id)
+        {
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Tab)
+                Event.current.Use();
+
+            var manager       = VirtualCrewManager.Instance;
+            var sails         = manager.AllSails;
+            var selectedGroup = manager.SelectedGroup;
+
+            // ── Group list ──────────────────────────────────────────────────
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Groups  (click to select)");
+            if (GUILayout.Button("New Group", GUILayout.Width(80)))
+            {
+                var newGroup = manager.CreateSailGroup("New Group");
+                manager.SelectedGroup = newGroup;
+                groupNameBuffer       = newGroup.Name;
+            }
+            GUILayout.EndHorizontal();
+
+            SailGroup groupToDelete = null;
+            foreach (var group in manager.SailGroups)
+            {
+                GUILayout.BeginHorizontal();
+                GUI.color = (group == selectedGroup) ? Color.cyan : Color.white;
+                if (GUILayout.Button(group.Name))
+                {
+                    if (group == selectedGroup) { manager.SelectedGroup = null; groupNameBuffer = ""; }
+                    else                        { manager.SelectedGroup = group; groupNameBuffer = group.Name; }
+                }
+                GUI.color   = Color.white;
+                GUI.enabled = !group.IsAllSails;
+                if (GUILayout.Button("X", GUILayout.Width(22))) groupToDelete = group;
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+            }
+            if (groupToDelete != null)
+            {
+                if (selectedGroup == groupToDelete) groupNameBuffer = "";
+                manager.DeleteSailGroup(groupToDelete); // also clears SelectedGroup if needed
+                selectedGroup = manager.SelectedGroup;
+            }
+
+            // ── Selected-group detail ───────────────────────────────────────
+            selectedGroup = manager.SelectedGroup;
+            if (selectedGroup != null)
+            {
+                GUILayout.Space(2);
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Name:", GUILayout.Width(42));
+                groupNameBuffer = GUILayout.TextField(groupNameBuffer);
+                if (GUILayout.Button("Set", GUILayout.Width(36)) && groupNameBuffer.Trim().Length > 0)
+                    selectedGroup.Name = groupNameBuffer.Trim();
+                GUILayout.EndHorizontal();
+
+                DrawGroupCommandPanel(manager, selectedGroup, sails);
+            }
+
+            GUI.DragWindow();
+        }
+
+        // ── Group command panel ─────────────────────────────────────────────
+
+        private void DrawGroupCommandPanel(VirtualCrewManager manager, SailGroup group,
+                                           IReadOnlyList<ICommonSailActions> allSails)
+        {
+            var caps = group.GetCommonCapabilities(allSails);
+            if (caps == SailCapability.None) return;
+
+            if (caps.HasFlag(SailCapability.Halyard))
+            {
+                GUILayout.Label("Halyard:");
+                GUILayout.BeginHorizontal();
+                DrawGroupHalyardButton(manager, "Reef", group, allSails, 0.00f);
+                DrawGroupHalyardButton(manager, "1/4",  group, allSails, 0.25f);
+                DrawGroupHalyardButton(manager, "1/2",  group, allSails, 0.50f);
+                DrawGroupHalyardButton(manager, "3/4",  group, allSails, 0.75f);
+                DrawGroupHalyardButton(manager, "Full", group, allSails, 1.00f);
+                GUILayout.EndHorizontal();
+            }
+
+            if (caps.HasFlag(SailCapability.SimpleSheet))
+            {
+                GUILayout.Label("Sheet:");
+                GUILayout.BeginHorizontal();
+                DrawGroupSimpleSheetButton(manager, "Hard",    group, allSails, 0.00f);
+                DrawGroupSimpleSheetButton(manager, "1/4",     group, allSails, 0.25f);
+                DrawGroupSimpleSheetButton(manager, "1/2",     group, allSails, 0.50f);
+                DrawGroupSimpleSheetButton(manager, "3/4",     group, allSails, 0.75f);
+                DrawGroupSimpleSheetButton(manager, "Let Fly", group, allSails, 1.00f);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                DrawGroupRelativeSheetButton(manager, "Harden Up", group, allSails, -0.10f);
+                DrawGroupRelativeSheetButton(manager, "Ease Out",  group, allSails,  0.10f);
+                DrawGroupTrimButton(manager, group, allSails);
+                GUILayout.EndHorizontal();
+            }
+            else if (caps.HasFlag(SailCapability.SquareSheet))
+            {
+                GUILayout.Label("Sheet:");
+                GUILayout.BeginHorizontal();
+                DrawGroupDualSheetButton(manager, "Full Port", group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Square, 0.00f, 1.00f);
+                DrawGroupDualSheetButton(manager, "1/2 Port",  group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Square, 0.25f, 0.75f);
+                DrawGroupDualSheetButton(manager, "Ahead",     group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Square, 0.50f, 0.50f);
+                DrawGroupDualSheetButton(manager, "1/2 Stbd",  group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Square, 0.75f, 0.25f);
+                DrawGroupDualSheetButton(manager, "Full Stbd", group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Square, 1.00f, 0.00f);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                DrawGroupTrimButton(manager, group, allSails);
+                GUILayout.EndHorizontal();
+            }
+            else if (caps.HasFlag(SailCapability.JibSheet))
+            {
+                GUILayout.Label("Sheet:");
+                GUILayout.BeginHorizontal();
+                DrawGroupDualSheetButton(manager, "Full Port", group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 0.00f, 1.00f);
+                DrawGroupDualSheetButton(manager, "3/4 Port",  group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 0.25f, 1.00f);
+                DrawGroupDualSheetButton(manager, "1/2 Port",  group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 0.50f, 1.00f);
+                DrawGroupDualSheetButton(manager, "1/4 Port",  group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 0.75f, 1.00f);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                DrawGroupDualSheetButton(manager, "Let Fly",   group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 1.00f, 1.00f);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                DrawGroupDualSheetButton(manager, "Full Stbd", group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 1.00f, 0.00f);
+                DrawGroupDualSheetButton(manager, "3/4 Stbd",  group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 1.00f, 0.25f);
+                DrawGroupDualSheetButton(manager, "1/2 Stbd",  group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 1.00f, 0.50f);
+                DrawGroupDualSheetButton(manager, "1/4 Stbd",  group, allSails,
+                    DualSheetSail.DualSheetSailSubtype.Jib, 1.00f, 0.75f);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                DrawGroupTrimButton(manager, group, allSails);
+                GUILayout.EndHorizontal();
+            }
+            else if (caps.HasFlag(SailCapability.Trim))
+            {
+                GUILayout.BeginHorizontal();
+                DrawGroupTrimButton(manager, group, allSails);
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        // ── Group button helpers ────────────────────────────────────────────
+
+        private void DrawGroupHalyardButton(VirtualCrewManager manager, string label,
+                                            SailGroup group, IReadOnlyList<ICommonSailActions> allSails,
+                                            float target)
+        {
+            if (GUILayout.Button(label))
+                foreach (var sail in group.GetMembers(allSails))
+                    manager.AddWorkRequest(new WorkRequest(sail, "Halyard " + label,
+                        new WinchTarget(sail.getHalyardWinch(), target)));
+        }
+
+        private void DrawGroupSimpleSheetButton(VirtualCrewManager manager, string label,
+                                                SailGroup group, IReadOnlyList<ICommonSailActions> allSails,
+                                                float target)
+        {
+            if (GUILayout.Button(label))
+                foreach (var sail in group.GetMembers(allSails).OfType<SimpleSail>())
+                    manager.AddWorkRequest(new WorkRequest(sail, "Sheet " + label,
+                        new WinchTarget(sail.getSheetWinch(), target)));
+        }
+
+        private void DrawGroupRelativeSheetButton(VirtualCrewManager manager, string label,
+                                                  SailGroup group, IReadOnlyList<ICommonSailActions> allSails,
+                                                  float delta)
+        {
+            if (GUILayout.Button(label))
+                foreach (var sail in group.GetMembers(allSails).OfType<SimpleSail>())
+                {
+                    var winch  = sail.getSheetWinch();
+                    float target = Mathf.Clamp01(winch.rope.currentLength + delta);
+                    manager.AddWorkRequest(new WorkRequest(sail, "Sheet " + label,
+                        new WinchTarget(winch, target)));
+                }
+        }
+
+        private void DrawGroupDualSheetButton(VirtualCrewManager manager, string label,
+                                              SailGroup group, IReadOnlyList<ICommonSailActions> allSails,
+                                              DualSheetSail.DualSheetSailSubtype subtype,
+                                              float portTarget, float starboardTarget)
+        {
+            if (GUILayout.Button(label))
+                foreach (var sail in group.GetMembers(allSails).OfType<DualSheetSail>()
+                                          .Where(s => s.getSubtype() == subtype))
+                {
+                    manager.AddWorkRequest(new WorkRequest(sail, "Port Sheet " + label,
+                        new WinchTarget(sail.getPortSheetWinch(), portTarget)));
+                    manager.AddWorkRequest(new WorkRequest(sail, "Starboard Sheet " + label,
+                        new WinchTarget(sail.getStarboardSheetWinch(), starboardTarget)));
+                }
+        }
+
+        private void DrawGroupTrimButton(VirtualCrewManager manager,
+                                         SailGroup group, IReadOnlyList<ICommonSailActions> allSails)
+        {
+            if (GUILayout.Button("Trim"))
+                foreach (var sail in group.GetMembers(allSails))
+                {
+                    if (sail is SimpleSail simple)
+                        manager.AddTrimRequest(new TrimRequest(simple));
+                    else if (sail is DualSheetSail dual)
+                    {
+                        if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Jib)
+                            manager.AddJibTrimRequest(new JibTrimRequest(dual));
+                        else if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Square)
+                            manager.AddSquareTrimRequest(new SquareTrimRequest(dual));
+                    }
+                }
+        }
+    }
+}
