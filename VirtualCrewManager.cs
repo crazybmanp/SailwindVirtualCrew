@@ -60,7 +60,6 @@ namespace SailwindVirtualCrew
             SailGroups = new List<SailGroup>();
             Crew = new List<Crewman>();
             Reset();
-            InitializeDefaultCrew();
         }
 
         public void SetCurrentVessel(string key)
@@ -136,6 +135,9 @@ namespace SailwindVirtualCrew
         public Crewman Pilot     => Crew.FirstOrDefault(c => c.Role == ShipRole.Pilot);
         public Crewman Navigator => Crew.FirstOrDefault(c => c.Role == ShipRole.Navigator);
 
+        /// <summary>
+        ///  Deprecated for now, since we have developer commands to add randomized crew
+        /// </summary>
         private void InitializeDefaultCrew()
         {
             Crew.Add(new Crewman("Silas",    ShipRole.Pilot,     rng));
@@ -218,7 +220,7 @@ namespace SailwindVirtualCrew
         public void RestoreShipCrew(List<CrewmanSaveData> saved)
         {
             Crew.Clear();
-            if (saved == null || saved.Count == 0) { InitializeDefaultCrew(); return; }
+            if (saved == null || saved.Count == 0) { return; }
             foreach (var d in saved)
                 Crew.Add(FromSaveData(d));
         }
