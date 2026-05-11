@@ -108,6 +108,7 @@ Strongly inspired by:
 - Can collaborate with the Navigator to get the island name if you have a recent lat/lon and you've visited the goods trader on that island or have a chart with that island.
   - Not sure how the latter would work with scrambled seas...
   - Note that a bad lat/lon might mean they make a mistake and name it incorrectly!
+- Some way to "Announce" when land sighted when coming in from the ocean
 
 #### Chef
 
@@ -129,7 +130,13 @@ Strongly inspired by:
 
 ### UI / UX
 
-For now, all features are accessed via windows; long-term the goal would be to achieve the same immersion Sailwind generally aims for (character models on board
+- For now, all features are accessed via windows; long-term the goal would be to achieve the same immersion Sailwind generally aims for (character models on board)
+- Dynamic hotkeys for combinations of sail groups & commands so you can shortcut your favorites (e.g. squares->deploy, jibs-> port1/2, etc...)
+- Rename crew members
+
+### Logic
+
+- Improve sail auto-trim for sails to find an efficient point that also has some "safe distance" from any efficiency cliff.
 
 ---
 
