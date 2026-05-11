@@ -16,11 +16,16 @@ namespace SailwindVirtualCrew
     {
         public const string PLUGIN_ID = "com.zorkinian.virtualcrew";
         public const string PLUGIN_NAME = "VirtualCrew";
-        public const string PLUGIN_VERSION = "0.0.9";
+        public const string PLUGIN_VERSION = "0.0.10";
 
         //--settings--
         internal static ConfigEntry<bool> exampleSetting;
         internal static ConfigEntry<KeyboardShortcut> ToggleCrewWindow;
+
+        // PID slider ranges
+        internal static ConfigEntry<float> PidMaxP;
+        internal static ConfigEntry<float> PidMaxI;
+        internal static ConfigEntry<float> PidMaxD;
 
         private float tickTimer = 0f;
         private const float tickInterval = 1f;
@@ -46,6 +51,10 @@ namespace SailwindVirtualCrew
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), PLUGIN_ID);
 
             exampleSetting = Config.Bind("Section", "Key", true, new ConfigDescription("Information about the config setting"));
+
+            PidMaxP = Config.Bind("Autopilot", "PidMaxP", 0.25f, "Maximum value for the P (proportional) slider.");
+            PidMaxI = Config.Bind("Autopilot", "PidMaxI", 0.25f, "Maximum value for the I (integral) slider.");
+            PidMaxD = Config.Bind("Autopilot", "PidMaxD", 0.25f, "Maximum value for the D (derivative) slider.");
 
             ToggleCrewWindow = Config.Bind("CrewHotkeys", "ToggleCrewWindow", new KeyboardShortcut(KeyCode.B));
             BuildShipMap = Config.Bind("CrewHotkeys", "BuildShipMap", new KeyboardShortcut(KeyCode.V));

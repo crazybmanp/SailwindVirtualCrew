@@ -33,10 +33,10 @@ namespace SailwindVirtualCrew
         private Texture2D goalDotTex;     // yellow = pilot's helm (best attempt)
         private Texture2D currentDotTex;  // white  = actual current heading
 
-        // PID text buffers
-        private string kpStr = "0.1";
-        private string kiStr = "0.0";
-        private string kdStr = "0.05";
+        // PID values
+        private float kp = 0.1f;
+        private float ki = 0.0f;
+        private float kd = 0.05f;
 
         // History graph
         private const int   GraphHeight    = 100;
@@ -273,18 +273,31 @@ namespace SailwindVirtualCrew
             GUILayout.EndHorizontal();
 
             // ── PID parameters ─────────────────────────────────────────────
+            float maxP = Plugin.PidMaxP.Value;
+            float maxI = Plugin.PidMaxI.Value;
+            float maxD = Plugin.PidMaxD.Value;
+
             GUILayout.BeginHorizontal();
             GUILayout.Label("P:", GUILayout.Width(16));
-            kpStr = GUILayout.TextField(kpStr, GUILayout.Width(55));
-            GUILayout.Label("I:", GUILayout.Width(16));
-            kiStr = GUILayout.TextField(kiStr, GUILayout.Width(55));
-            GUILayout.Label("D:", GUILayout.Width(16));
-            kdStr = GUILayout.TextField(kdStr, GUILayout.Width(55));
+            kp = GUILayout.HorizontalSlider(Mathf.Clamp(kp, 0f, maxP), 0f, maxP);
+            GUILayout.Label($"{kp:F3}", GUILayout.Width(40));
             GUILayout.EndHorizontal();
 
-            if (float.TryParse(kpStr, out float kp)) controller.Kp = kp;
-            if (float.TryParse(kiStr, out float ki)) controller.Ki = ki;
-            if (float.TryParse(kdStr, out float kd)) controller.Kd = kd;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("I:", GUILayout.Width(16));
+            ki = GUILayout.HorizontalSlider(Mathf.Clamp(ki, 0f, maxI), 0f, maxI);
+            GUILayout.Label($"{ki:F3}", GUILayout.Width(40));
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("D:", GUILayout.Width(16));
+            kd = GUILayout.HorizontalSlider(Mathf.Clamp(kd, 0f, maxD), 0f, maxD);
+            GUILayout.Label($"{kd:F3}", GUILayout.Width(40));
+            GUILayout.EndHorizontal();
+
+            controller.Kp = kp;
+            controller.Ki = ki;
+            controller.Kd = kd;
 
             string status = autopilotEngaged ? "● Autopilot ON" : "○ Autopilot OFF";
             GUILayout.Label($"Output: {controller.Output:+0.00;-0.00;0.00}   {status}");
