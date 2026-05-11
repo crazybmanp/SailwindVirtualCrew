@@ -10,7 +10,7 @@ namespace SailwindVirtualCrew
         private Rect windowRect = new Rect(860, 340, 300, 400);
         private static readonly int windowId = "VirtualCrewNavigatorWindow".GetHashCode();
 
-        // Equipment checkboxes
+        // Equipment state (auto-detected by ScanForTools)
         private bool hasChronocompass = false;
         private bool hasChronometer   = false;
         private bool hasCompass       = false;
@@ -18,7 +18,17 @@ namespace SailwindVirtualCrew
         private bool hasSunCompass    = false;
         private bool hasChipLog       = false;
 
-        private readonly List<NavigationResult> recentResults = new List<NavigationResult>();
+        private static readonly string[] ToolItemNames =
+        {
+            "chronocompass",
+            "chronometer",
+            "compass",
+            "quadrant",
+            "sun compass",
+            "chip log",
+        };
+
+        private readonly List<string> recentResults = new List<string>();
         private const int MaxResults = 3;
 
         private const float ButtonHeight      = 22f;
@@ -29,11 +39,11 @@ namespace SailwindVirtualCrew
         private static float GlobalTime => Sun.sun.globalTime;
 
         // Quadrant: local 20:00–04:00 (wraps midnight)
-        private static bool InQuadrantWindow  => LocalTime  >= 20f || LocalTime  < 4f;
+        private static bool InQuadrantWindow     => LocalTime  >= 20f || LocalTime  < 4f;
         // Sun Compass: local 11:00–13:00
-        private static bool InSunCompassWindow => LocalTime  >= 11f && LocalTime  < 13f;
+        private static bool InSunCompassWindow   => LocalTime  >= 11f && LocalTime  < 13f;
         // Chronometer: global 11:00–13:00
-        private static bool InChronometerWindow => GlobalTime >= 11f && GlobalTime < 13f;
+        private static bool InChronometerWindow  => GlobalTime >= 11f && GlobalTime < 13f;
         // Chronocompass: local 08:00–16:00
         private static bool InChronocompassWindow => LocalTime >= 8f && LocalTime < 16f;
 
@@ -60,12 +70,13 @@ namespace SailwindVirtualCrew
             var pending   = manager.NavigateRequests.Count > 0
                             ? manager.NavigateRequests[0] : null;
 
-            float contentHeight = ButtonHeight * 2                            // name + stats
-                                + 4f + ButtonHeight                        // space + "Equipment:"
-                                + 6 * ButtonHeight                         // 6 toggles
-                                + 4f                                       // space
+            float contentHeight = ButtonHeight * 2                               // name + stats
+                                + ButtonHeight                                   // Search for Tools button
+                                + 4f + ButtonHeight                              // space + "Equipment:"
+                                + 6 * ButtonHeight                               // 6 tool status labels
+                                + 4f                                             // space
                                 + (DeveloperMode.IsEnabled ? ButtonHeight : 0f) // override toggle
-                                + 4 * ButtonHeight;                        // 4 instrument buttons
+                                + 4 * ButtonHeight;                              // 4 instrument buttons
 
             if (pending != null)
                 contentHeight += pending.Status == WorkRequestStatus.InProgress
@@ -105,15 +116,19 @@ namespace SailwindVirtualCrew
             else
                 GUILayout.Label($"Dexterity: {navigator.AdvDexterity}   Intelligence: {navigator.AdvIntelligence}");
 
-            // ── Equipment ───────────────────────────────────────────────────
+            // ── Tool search ─────────────────────────────────────────────────
+            if (GUILayout.Button("Search for Tools"))
+                ScanForTools();
+
+            // ── Equipment status ────────────────────────────────────────────
             GUILayout.Space(4);
             GUILayout.Label("Equipment:");
-            hasChronocompass = GUILayout.Toggle(hasChronocompass, "Chronocompass");
-            hasChronometer   = GUILayout.Toggle(hasChronometer,   "Chronometer");
-            hasCompass       = GUILayout.Toggle(hasCompass,       "Compass");
-            hasQuadrant      = GUILayout.Toggle(hasQuadrant,      "Quadrant");
-            hasSunCompass    = GUILayout.Toggle(hasSunCompass,    "Sun Compass");
-            hasChipLog       = GUILayout.Toggle(hasChipLog,       "Chip Log");
+            GUILayout.Label($"  {Check(hasChronocompass)} Chronocompass");
+            GUILayout.Label($"  {Check(hasChronometer)}   Chronometer");
+            GUILayout.Label($"  {Check(hasCompass)}       Compass");
+            GUILayout.Label($"  {Check(hasQuadrant)}      Quadrant");
+            GUILayout.Label($"  {Check(hasSunCompass)}    Sun Compass");
+            GUILayout.Label($"  {Check(hasChipLog)}       Chip Log");
 
             // ── Instrument buttons ──────────────────────────────────────────
             GUILayout.Space(4);
@@ -124,22 +139,46 @@ namespace SailwindVirtualCrew
             // Quadrant — latitude, local 20:00–04:00
             GUI.enabled = navFree && CanUseQuadrant;
             if (GUILayout.Button("Quadrant"))
-                manager.AddNavigateRequest(new NavigateRequest(NavigationMethod.Quadrant, OnNavigationComplete));
+            {
+                hasQuadrant = LocatorUtils.findItem(new[] { "quadrant" })[0];
+                if (!hasQuadrant)
+                    AddResult("Can't find quadrant nearby!");
+                else
+                    manager.AddNavigateRequest(new NavigateRequest(NavigationMethod.Quadrant, OnNavigationComplete));
+            }
 
             // Sun Compass — latitude, local 11:00–13:00
             GUI.enabled = navFree && CanUseSunCompass;
             if (GUILayout.Button("Sun Compass"))
-                manager.AddNavigateRequest(new NavigateRequest(NavigationMethod.SunCompass, OnNavigationComplete));
+            {
+                hasSunCompass = LocatorUtils.findItem(new[] { "sun compass" })[0];
+                if (!hasSunCompass)
+                    AddResult("Can't find sun compass nearby!");
+                else
+                    manager.AddNavigateRequest(new NavigateRequest(NavigationMethod.SunCompass, OnNavigationComplete));
+            }
 
             // Chronometer — longitude, global 11:00–13:00
             GUI.enabled = navFree && CanUseChronometer;
             if (GUILayout.Button("Chronometer"))
-                manager.AddNavigateRequest(new NavigateRequest(NavigationMethod.Chronometer, OnNavigationComplete));
+            {
+                hasChronometer = LocatorUtils.findItem(new[] { "chronometer" })[0];
+                if (!hasChronometer)
+                    AddResult("Can't find chronometer nearby!");
+                else
+                    manager.AddNavigateRequest(new NavigateRequest(NavigationMethod.Chronometer, OnNavigationComplete));
+            }
 
             // Chronocompass — latitude + longitude, local 08:00–16:00
             GUI.enabled = navFree && CanUseChronocompass;
             if (GUILayout.Button("Chronocompass"))
-                manager.AddNavigateRequest(new NavigateRequest(NavigationMethod.Chronocompass, OnNavigationComplete));
+            {
+                hasChronocompass = LocatorUtils.findItem(new[] { "chronocompass" })[0];
+                if (!hasChronocompass)
+                    AddResult("Can't find chronocompass nearby!");
+                else
+                    manager.AddNavigateRequest(new NavigateRequest(NavigationMethod.Chronocompass, OnNavigationComplete));
+            }
 
             GUI.enabled = true;
 
@@ -167,23 +206,39 @@ namespace SailwindVirtualCrew
             else
             {
                 foreach (var result in recentResults)
-                {
-                    string coords = "";
-                    if (result.HasLatitude)  coords += result.LatitudeText;
-                    if (result.HasLatitude && result.HasLongitude) coords += "  ";
-                    if (result.HasLongitude) coords += result.LongitudeText;
-                    GUILayout.Label($"[{result.MethodLabel}] {coords}");
-                }
+                    GUILayout.Label(result);
             }
 
             GUI.DragWindow();
         }
 
-        private void OnNavigationComplete(NavigationResult result)
+        private static string Check(bool value) => value ? "[x]" : "[ ]";
+
+        private void AddResult(string text)
         {
-            recentResults.Insert(0, result);
+            recentResults.Insert(0, text);
             if (recentResults.Count > MaxResults)
                 recentResults.RemoveAt(recentResults.Count - 1);
+        }
+
+        private void OnNavigationComplete(NavigationResult result)
+        {
+            string coords = "";
+            if (result.HasLatitude)  coords += result.LatitudeText;
+            if (result.HasLatitude && result.HasLongitude) coords += "  ";
+            if (result.HasLongitude) coords += result.LongitudeText;
+            AddResult($"[{result.MethodLabel}] {coords}");
+        }
+
+        private void ScanForTools()
+        {
+            bool[] found     = LocatorUtils.findItem(ToolItemNames);
+            hasChronocompass = found[0];
+            hasChronometer   = found[1];
+            hasCompass       = found[2];
+            hasQuadrant      = found[3];
+            hasSunCompass    = found[4];
+            hasChipLog       = found[5];
         }
 
         private Texture2D fillTexture;
@@ -201,51 +256,6 @@ namespace SailwindVirtualCrew
             float fillWidth = (bar.width - 4) * Mathf.Clamp01(progress / 100f);
             if (fillWidth > 0f)
                 GUI.DrawTexture(new Rect(bar.x + 2, bar.y + 2, fillWidth, bar.height - 4), fillTexture);
-        }
-
-        private void scanForTools()
-        {
-            Vector3 playerPos = GameState.currentBoat.transform.position;
-            float maxDistSqr = 100f * 100f; // Use square magnitude for performance
-
-            // Target item names as defined in the game's prefab system
-            string[] targetItems = { "quadrant", "sun compass", "chronometer", "chronocompass" };
-
-            // It is more efficient to find all instances of ShipItem in the scene 
-            // or use the PrefabsDirectory if it maintains a runtime list.
-            ShipItem[] allItems = GameObject.FindObjectsOfType<ShipItem>();
-
-            foreach (ShipItem item in allItems)
-            {
-                Console.WriteLine("item:" + item.name);
-                if (System.Array.Exists(targetItems, name => name == item.name))
-                {
-                    // Check 1: Is it in the personal inventory or held?
-                    bool inInventory = item.GetCurrentInventorySlot() != -1 || item.held != null;
-
-                    if (inInventory)
-                    {
-                        Console.WriteLine("----This is an inventory item!");
-                    }
-
-                    // Check 2: Is it within 100 meters?
-                    float distSqr = (item.transform.position - playerPos).sqrMagnitude;
-
-                    Console.WriteLine(string.Format("Item name:{0}, InventoryPos:{1}, Distance:{2:F2}", item.name, item.GetCurrentInventorySlot(), distSqr));
-
-                    bool isClose = distSqr <= maxDistSqr;
-
-                    if (isClose)
-                    {
-                        Console.WriteLine("----This is within 100 meters!");
-                    }
-
-                    if (inInventory || isClose)
-                    {
-                        Console.WriteLine("----This can be used for navigation!");
-                    }
-                }
-            }
         }
     }
 }
