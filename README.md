@@ -78,7 +78,8 @@ Strongly inspired by:
 
 #### Deckhands
 
-- - Can raise and lower anchors
+- Can raise and lower anchors
+- Can operate bilge pumps
 
 #### Pilots
 
