@@ -33,5 +33,6 @@ namespace SailwindVirtualCrew
         public Dictionary<string, VesselSaveData> vessels = new Dictionary<string, VesselSaveData>();
         public List<CrewmanSaveData> shipCrew;
         public Dictionary<string, List<CrewmanSaveData>> portCrewPools;
+        public Dictionary<string, float[]> windowPositions;
     }
 }

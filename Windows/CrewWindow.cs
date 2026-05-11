@@ -3,11 +3,15 @@ using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
-    public class CrewWindow : MonoBehaviour
+    public class CrewWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
         private Rect windowRect = new Rect(20, 20, 400, 560);
         private static readonly int windowId = "VirtualCrewWindow".GetHashCode();
+
+        public string WindowKey => "CrewWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
 
         private ICommonSailActions selectedSail = null;
         private string renameBuffer = "";

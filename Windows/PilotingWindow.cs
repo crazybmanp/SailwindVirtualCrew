@@ -3,11 +3,15 @@ using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
-    public class PilotingWindow : MonoBehaviour
+    public class PilotingWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
         private Rect windowRect = new Rect(440, 20, 380, 800);
         private static readonly int windowId = "VirtualCrewPilotWindow".GetHashCode();
+
+        public string WindowKey => "PilotingWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
 
         private readonly PilotController controller = new PilotController();
 

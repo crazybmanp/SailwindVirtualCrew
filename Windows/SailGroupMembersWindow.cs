@@ -3,11 +3,15 @@ using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
-    public class SailGroupMembersWindow : MonoBehaviour
+    public class SailGroupMembersWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
         private Rect windowRect = new Rect(860, 20, 280, 560);
         private static readonly int windowId = "VirtualCrewSailGroupMembersWindow".GetHashCode();
+
+        public string WindowKey => "SailGroupMembersWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
 
         private const float ButtonHeight      = 22f;
         private const float BaseContentHeight = 300f;

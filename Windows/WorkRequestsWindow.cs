@@ -2,11 +2,15 @@ using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
-    public class WorkRequestsWindow : MonoBehaviour
+    public class WorkRequestsWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
         private Rect windowRect = new Rect(20, 580, 500, 560);
         private static readonly int windowId = "VirtualCrewWorkRequestsWindow".GetHashCode();
+
+        public string WindowKey => "WorkRequestsWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
 
         private Texture2D fillTexture;
         private Texture2D positioningTexture;

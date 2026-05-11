@@ -2,11 +2,15 @@ using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
-    public class DeveloperWindow : MonoBehaviour
+    public class DeveloperWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
         private Rect windowRect = new Rect(20, 20, 300, 80);
         private static readonly int windowId = "VirtualCrewDeveloperWindow".GetHashCode();
+
+        public string WindowKey => "DeveloperWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
 
         private void Update()
         {

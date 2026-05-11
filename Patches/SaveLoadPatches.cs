@@ -30,13 +30,18 @@ namespace SailwindVirtualCrew
                     .ToList();
             }
 
+            var windowPositions = new Dictionary<string, float[]>();
+            foreach (var w in Plugin.Instance.GetComponents<IWindowPosition>())
+                windowPositions[w.WindowKey] = w.GetPosition();
+
             var container = new VirtualCrewSaveData
             {
                 vessels      = new Dictionary<string, VesselSaveData>(mgr.AllVesselsData),
                 shipCrew     = mgr.Crew.Select(c => c.ToSaveData()).ToList(),
                 portCrewPools = mgr.PortCrewPools.ToDictionary(
                     kv => kv.Key,
-                    kv => kv.Value.Select(c => c.ToSaveData()).ToList())
+                    kv => kv.Value.Select(c => c.ToSaveData()).ToList()),
+                windowPositions = windowPositions
             };
             ModSave.Save(Plugin.Instance.Info, container);
         }
@@ -51,6 +56,10 @@ namespace SailwindVirtualCrew
                 VirtualCrewManager.Instance.AllVesselsData = data.vessels;
             VirtualCrewManager.Instance.RestoreShipCrew(data.shipCrew);
             VirtualCrewManager.Instance.RestorePortPools(data.portCrewPools);
+            if (data.windowPositions != null)
+                foreach (var w in Plugin.Instance.GetComponents<IWindowPosition>())
+                    if (data.windowPositions.TryGetValue(w.WindowKey, out var pos) && pos.Length >= 2)
+                        w.SetPosition(pos[0], pos[1]);
         }
     }
 }

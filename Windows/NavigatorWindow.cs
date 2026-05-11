@@ -4,11 +4,15 @@ using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
-    public class NavigatorWindow : MonoBehaviour
+    public class NavigatorWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
         private Rect windowRect = new Rect(860, 340, 300, 400);
         private static readonly int windowId = "VirtualCrewNavigatorWindow".GetHashCode();
+
+        public string WindowKey => "NavigatorWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
 
         // Equipment state (auto-detected by ScanForTools)
         private bool hasChronocompass = false;

@@ -2,11 +2,15 @@ using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
-    public class CrewRosterWindow : MonoBehaviour
+    public class CrewRosterWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
         private Rect windowRect = new Rect(840, 20, 300, 400);
         private static readonly int windowId = "VirtualCrewRosterWindow".GetHashCode();
+
+        public string WindowKey => "CrewRosterWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
 
         private Crewman selectedShipCrew  = null;
         private Crewman selectedAvailable = null;

@@ -4,11 +4,15 @@ using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
-    public class SailGroupsWindow : MonoBehaviour
+    public class SailGroupsWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
         private Rect windowRect = new Rect(440, 20, 400, 560);
         private static readonly int windowId = "VirtualCrewSailGroupsWindow".GetHashCode();
+
+        public string WindowKey => "SailGroupsWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
 
         private string groupNameBuffer = "";
 
