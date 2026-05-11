@@ -102,14 +102,14 @@ namespace SailwindVirtualCrew
                 if (req.Status == WorkRequestStatus.Open)
                 {
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label($"[Waiting] {req.CommandName} — {req.Sail.getSailName()}");
+                    GUILayout.Label($"[Waiting] {req.DisplayLabel}");
                     if (GUILayout.Button("X", GUILayout.Width(22))) toCancel = req;
                     GUILayout.EndHorizontal();
                 }
                 else if (req.Status == WorkRequestStatus.Positioning)
                 {
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label($"[{req.AssignedCrewman.Name}] (moving) {req.CommandName} — {req.Sail.getSailName()}");
+                    GUILayout.Label($"[{req.AssignedCrewman.Name}] (moving) {req.DisplayLabel}");
                     if (GUILayout.Button("X", GUILayout.Width(22))) toCancel = req;
                     GUILayout.EndHorizontal();
                     DrawPositioningBar(req.GetPositioningProgress());
@@ -117,7 +117,7 @@ namespace SailwindVirtualCrew
                 else if (req.Status == WorkRequestStatus.InProgress)
                 {
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label($"[{req.AssignedCrewman.Name}] {req.CommandName} — {req.Sail.getSailName()}");
+                    GUILayout.Label($"[{req.AssignedCrewman.Name}] {req.DisplayLabel}");
                     if (GUILayout.Button("X", GUILayout.Width(22))) toCancel = req;
                     GUILayout.EndHorizontal();
                     DrawProgressBar(req.GetProgress());

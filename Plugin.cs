@@ -282,9 +282,13 @@ namespace SailwindVirtualCrew
                     Console.WriteLine("-------------------------------------------");
                 }
 
-                // Now I need to get all the winches. Every boat has a billion of them lying dormant for crazy sail configurations,
-                // so I need to only get a list of the ones that the player can interact with. Going to a bit of trial and error here.
-                // First thought - get all winches on the vessel, see what sails they indirectly reference?
+                // Anchor winches
+                foreach (GPButtonRopeWinch winch in winches)
+                {
+                    if (winch.rope is RopeControllerAnchor)
+                        VirtualCrewManager.Instance.AnchorWinches.Add(winch);
+                }
+                Console.WriteLine($"Found {VirtualCrewManager.Instance.AnchorWinches.Count} anchor winch(es).");
             }
 
             if (DeployAllSail.Value.IsDown())

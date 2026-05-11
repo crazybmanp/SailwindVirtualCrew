@@ -96,6 +96,8 @@ namespace SailwindVirtualCrew
             Status = WorkRequestStatus.InProgress;
         }
 
+        public string DisplayLabel => Sail != null ? $"{CommandName} — {Sail.getSailName()}" : CommandName;
+
         public bool IsComplete() => Targets.All(t => t.IsAtTarget());
 
         // Average fraction across all targets, expressed as 0–100.

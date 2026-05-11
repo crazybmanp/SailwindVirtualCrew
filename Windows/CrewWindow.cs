@@ -58,7 +58,7 @@ namespace SailwindVirtualCrew
 
             // Vessel label + rename row + "Sails" label = 3 rows
             windowRect.height = BaseContentHeight + ButtonHeight * 3 + sailListHeight + commandHeight;
-            windowRect = GUI.Window(windowId, windowRect, DrawWindow, "Sails");
+            windowRect = GUI.Window(windowId, windowRect, DrawWindow, "Deck Orders");
         }
 
         private void DrawWindow(int id)
@@ -87,6 +87,23 @@ namespace SailwindVirtualCrew
                 vesselRenameBuffer = "";
             }
             GUILayout.EndHorizontal();
+
+            // ── Anchor ──────────────────────────────────────────────────────
+            var anchors = manager.AnchorWinches;
+            if (anchors.Count > 0)
+            {
+                GUILayout.BeginHorizontal();
+                bool anchorBusy = anchors.Any(w => manager.HasPendingRequestForWinch(w));
+                GUI.enabled = !anchorBusy;
+                if (GUILayout.Button("Drop Anchor"))
+                    manager.AddWorkRequest(new WorkRequest(null, "Drop Anchor",
+                        anchors.Select(w => new WinchTarget(w, 1f)).ToArray()));
+                if (GUILayout.Button("Raise Anchor"))
+                    manager.AddWorkRequest(new WorkRequest(null, "Raise Anchor",
+                        anchors.Select(w => new WinchTarget(w, 0f)).ToArray()));
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+            }
 
             // ── Sail list ───────────────────────────────────────────────────
             GUILayout.Label("Sails  (click to select)");

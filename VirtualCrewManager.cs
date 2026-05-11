@@ -54,6 +54,8 @@ namespace SailwindVirtualCrew
             }
         }
 
+        public List<GPButtonRopeWinch> AnchorWinches { get; private set; }
+
         public IReadOnlyList<ICommonSailActions> AllSails => allSails.AsReadOnly();
 
         private VirtualCrewManager()
@@ -148,6 +150,7 @@ namespace SailwindVirtualCrew
             NavigateRequests = new List<NavigateRequest>();
             BailRequests     = new List<BailRequest>();
             crewWinchInstructions = new Dictionary<GPButtonRopeWinch, WinchTarget>();
+            AnchorWinches = new List<GPButtonRopeWinch>();
 
             // Rebuild the AllSails group; keep user-created groups intact.
             AllSailsGroup = new SailGroup("All Sails", isAllSails: true);
