@@ -253,6 +253,14 @@ namespace SailwindVirtualCrew
             if (navReq != null) CancelNavigateRequest(navReq);
             c.CurrentTask = null;
             Crew.Remove(c);
+            if (CurrentPort != null)
+            {
+                string key = CurrentPort.GetPortName();
+                if (!PortCrewPools.ContainsKey(key))
+                    PortCrewPools[key] = new List<Crewman>();
+                PortCrewPools[key].Add(c);
+                AvailableAtPort = PortCrewPools[key];
+            }
         }
 
         public void RestoreShipCrew(List<CrewmanSaveData> saved)

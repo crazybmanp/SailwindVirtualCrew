@@ -367,7 +367,8 @@ namespace SailwindVirtualCrew
                 Console.WriteLine("Scanning for items");
                 Console.WriteLine("===============");
 
-                Vector3 playerPos = GameState.currentBoat.transform.position;
+                Vector3 playerPos = GameState.lastBoat.position;
+                Console.WriteLine("Got position");
                 float maxDistSqr = 100f * 100f; // Use square magnitude for performance
 
                 // Target item names as defined in the game's prefab system
@@ -376,6 +377,7 @@ namespace SailwindVirtualCrew
                 // It is more efficient to find all instances of ShipItem in the scene 
                 // or use the PrefabsDirectory if it maintains a runtime list.
                 ShipItem[] allItems = GameObject.FindObjectsOfType<ShipItem>();
+                Console.WriteLine("Got item list");
 
                 foreach (ShipItem item in allItems)
                 {

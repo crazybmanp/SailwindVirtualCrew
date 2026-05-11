@@ -4,7 +4,7 @@ namespace SailwindVirtualCrew
 {
     public class Crewman
     {
-        public string   Name { get; }
+        public string   Name { get; private set; }
         public ShipRole Role { get; }
 
         // True stats — used for all calculations
@@ -101,6 +101,8 @@ namespace SailwindVirtualCrew
                 default:                     return $"S{Strength}  D{Dexterity}";
             }
         }
+
+        public void Rename(string newName) { Name = newName; }
 
         public CrewmanSaveData ToSaveData() => new CrewmanSaveData
         {

@@ -31,11 +31,13 @@ Strongly inspired by:
 
 #### Deckhand
 
-- Can operate winches.
+- Can operate sail winches (halyards/sheets).
 - Can be commanded to bail out water
+- Can raise and lower anchors
 - You can issue commands like "lower all sails"
 - They take on the jobs, move to the winches (based on Dexterity), and operate them (based on Strength).
 - If you have a big ship, you may want to get more than one deckhand, or you'll be waiting a long time for them to finish all the jobs!
+
 
 #### Pilot
 
@@ -83,7 +85,6 @@ Strongly inspired by:
 
 #### Deckhands
 
-- Can raise and lower anchors
 - Can operate bilge pumps
 
 #### Pilots

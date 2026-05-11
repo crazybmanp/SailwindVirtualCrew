@@ -14,6 +14,9 @@ namespace SailwindVirtualCrew
 
         private Crewman selectedShipCrew  = null;
         private Crewman selectedAvailable = null;
+        private string  crewRenameBuffer  = "";
+
+        private int? bedCount = null;
 
         private const float RowHeight  = 22f;
         private const float StatHeight = 18f;
@@ -54,6 +57,15 @@ namespace SailwindVirtualCrew
 
             var mgr = VirtualCrewManager.Instance;
 
+            // ── Capacity ────────────────────────────────────────────────────
+            GUILayout.BeginHorizontal();
+            string bedLabel = bedCount.HasValue ? $"Beds: {bedCount}" : "Beds: ?";
+            GUILayout.Label($"{bedLabel}  |  Crew: {mgr.Crew.Count}");
+            if (GUILayout.Button("Scan", GUILayout.Width(50)))
+                bedCount = LocatorUtils.CountBeds();
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4);
+
             // ── On Ship ─────────────────────────────────────────────────────
             GUILayout.Label("On Ship:");
             foreach (var c in mgr.Crew)
@@ -62,17 +74,24 @@ namespace SailwindVirtualCrew
                 string label = sel ? $"► {c.Name}  ({c.Role})" : $"  {c.Name}  ({c.Role})";
                 if (GUILayout.Button(label))
                 {
-                    selectedShipCrew  = sel ? null : c;
-                    selectedAvailable = null;
+                    if (sel) { selectedShipCrew = null; crewRenameBuffer = ""; }
+                    else     { selectedShipCrew = c;    crewRenameBuffer = c.Name; selectedAvailable = null; }
                 }
             }
             if (selectedShipCrew != null)
             {
                 GUILayout.Label(StatLine(selectedShipCrew));
-                if (GUILayout.Button($"Fire {selectedShipCrew.Name}"))
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Name:", GUILayout.Width(42));
+                crewRenameBuffer = GUILayout.TextField(crewRenameBuffer);
+                if (GUILayout.Button("Set", GUILayout.Width(36)) && crewRenameBuffer.Trim().Length > 0)
+                    selectedShipCrew.Rename(crewRenameBuffer.Trim());
+                GUILayout.EndHorizontal();
+                if (mgr.CurrentPort != null && GUILayout.Button($"Fire {selectedShipCrew.Name}"))
                 {
                     mgr.FireCrew(selectedShipCrew);
                     selectedShipCrew = null;
+                    crewRenameBuffer = "";
                 }
             }
 
@@ -96,6 +115,7 @@ namespace SailwindVirtualCrew
                     {
                         selectedAvailable = sel ? null : c;
                         selectedShipCrew  = null;
+                        crewRenameBuffer  = "";
                     }
                 }
                 if (selectedAvailable != null)
