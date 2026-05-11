@@ -1,0 +1,139 @@
+using UnityEngine;
+
+namespace SailwindVirtualCrew
+{
+    public class MaintenanceWindow : MonoBehaviour, IWindowPosition
+    {
+        private bool showWindow = false;
+        private Rect windowRect = new Rect(560, 340, 300, 200);
+        private static readonly int windowId = "VirtualCrewMaintenanceWindow".GetHashCode();
+
+        public string WindowKey => "MaintenanceWindow";
+        public float[] GetPosition() => new[] { windowRect.x, windowRect.y };
+        public void SetPosition(float x, float y) { windowRect.x = x; windowRect.y = y; }
+
+        private float waterLevel   = 0f;
+        private float pollTimer    = 0f;
+        private const float PollInterval  = 10f;
+        private const float ButtonHeight  = 22f;
+
+        private static BoatDamage GetBoatDamage() =>
+            GameState.lastBoat != null ? GameState.lastBoat.GetComponent<BoatDamage>() : null;
+
+        private void Update()
+        {
+            if (Plugin.ToggleCrewWindow.Value.IsDown())
+                showWindow = !showWindow;
+
+            if (DeveloperMode.IsEnabled)
+            {
+                var bd = GetBoatDamage();
+                if (bd != null) waterLevel = bd.waterLevel;
+            }
+            else
+            {
+                pollTimer -= Time.deltaTime;
+                if (pollTimer <= 0f)
+                {
+                    var bd = GetBoatDamage();
+                    if (bd != null) waterLevel = bd.waterLevel;
+                    pollTimer = PollInterval;
+                }
+            }
+        }
+
+        private void OnGUI()
+        {
+            if (!showWindow) return;
+
+            var manager = VirtualCrewManager.Instance;
+            var bails   = manager.BailRequests;
+
+            float contentHeight = ButtonHeight  // water label
+                                + ButtonHeight; // bail button
+
+            foreach (var b in bails)
+                contentHeight += b.Status == WorkRequestStatus.InProgress
+                    ? ButtonHeight + 14f  // crewman label + bar
+                    : ButtonHeight;       // waiting label
+
+            if (DeveloperMode.IsEnabled)
+                contentHeight += 4f + ButtonHeight; // dev button
+
+            windowRect.height = contentHeight + 300f; // title bar padding
+            windowRect = GUI.Window(windowId, windowRect, DrawWindow, "Maintenance");
+        }
+
+        private void DrawWindow(int id)
+        {
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Tab)
+                Event.current.Use();
+
+            var manager = VirtualCrewManager.Instance;
+            var bd      = GetBoatDamage();
+            var bails   = manager.BailRequests;
+
+            // ── Water level ─────────────────────────────────────────────────
+            string waterStr = DeveloperMode.IsEnabled
+                ? $"{waterLevel * 100f:F2}%"
+                : $"{waterLevel * 100f:F0}%";
+            GUILayout.Label($"Water: {waterStr}");
+
+            // ── Bail button ──────────────────────────────────────────────────
+            GUI.enabled = bd != null && waterLevel > 0.05f;
+            if (GUILayout.Button("Bail Until Empty") && bd != null)
+                manager.AddBailRequest(new BailRequest(bd));
+            GUI.enabled = true;
+
+            // ── Active bail requests ─────────────────────────────────────────
+            foreach (var bail in bails)
+            {
+                if (bail.Status == WorkRequestStatus.InProgress)
+                {
+                    string phase = bail.IsPickingUp ? "scooping..." : "dumping...";
+                    GUILayout.Label($"  [{bail.AssignedCrewman?.Name}] {phase}");
+                    DrawProgressBar(bail.GetProgress());
+                }
+                else
+                {
+                    GUILayout.Label("  Waiting for deckhand...");
+                }
+            }
+
+            // ── Developer controls ───────────────────────────────────────────
+            if (DeveloperMode.IsEnabled)
+            {
+                GUILayout.Space(4);
+                if (GUILayout.Button("Set Half-Flooded"))
+                {
+                    var freshBd = GetBoatDamage();
+                    if (freshBd != null)
+                    {
+                        freshBd.waterLevel = 0.5f;
+                        waterLevel = 0.5f;
+                        pollTimer  = PollInterval;
+                    }
+                }
+            }
+
+            GUI.DragWindow();
+        }
+
+        private Texture2D fillTexture;
+
+        private void DrawProgressBar(float progress)
+        {
+            if (fillTexture == null)
+            {
+                fillTexture = new Texture2D(1, 1);
+                fillTexture.SetPixel(0, 0, Color.cyan);
+                fillTexture.Apply();
+            }
+            Rect bar = GUILayoutUtility.GetRect(0, 14, GUILayout.ExpandWidth(true));
+            GUI.Box(bar, "");
+            float fillWidth = (bar.width - 4) * Mathf.Clamp01(progress / 100f);
+            if (fillWidth > 0f)
+                GUI.DrawTexture(new Rect(bar.x + 2, bar.y + 2, fillWidth, bar.height - 4), fillTexture);
+        }
+    }
+}

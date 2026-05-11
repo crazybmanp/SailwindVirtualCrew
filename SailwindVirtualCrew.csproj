@@ -73,6 +73,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Requests\BailRequest.cs" />
     <Compile Include="IWindowPosition.cs" />
     <Compile Include="LocatorUtils.cs" />
     <Compile Include="WeatherUtils.cs" />
@@ -82,6 +83,7 @@
     <Compile Include="Windows\DeveloperWindow.cs" />
     <Compile Include="Requests\NavigateRequest.cs" />
     <Compile Include="Requests\NavigationResult.cs" />
+    <Compile Include="Windows\MaintenanceWindow.cs" />
     <Compile Include="Windows\NavigatorWindow.cs" />
     <Compile Include="Patches\PortDudePatches.cs" />
     <Compile Include="PilotController.cs" />

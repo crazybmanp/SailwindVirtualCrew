@@ -74,6 +74,7 @@ namespace SailwindVirtualCrew
             gameObject.AddComponent<SailGroupMembersWindow>();
             gameObject.AddComponent<WorkRequestsWindow>();
             gameObject.AddComponent<NavigatorWindow>();
+            gameObject.AddComponent<MaintenanceWindow>();
             gameObject.AddComponent<PilotingWindow>();
             gameObject.AddComponent<CrewRosterWindow>();
         }

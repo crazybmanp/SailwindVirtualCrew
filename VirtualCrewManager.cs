@@ -20,6 +20,7 @@ namespace SailwindVirtualCrew
         public List<JibTrimRequest> JibTrimRequests { get; private set; }
         public List<SquareTrimRequest> SquareTrimRequests { get; private set; }
         public List<NavigateRequest> NavigateRequests { get; private set; }
+        public List<BailRequest>     BailRequests     { get; private set; }
         public Dictionary<GPButtonRopeWinch, WinchTarget> crewWinchInstructions;
 
         private readonly Random rng = new Random();
@@ -145,6 +146,7 @@ namespace SailwindVirtualCrew
             JibTrimRequests = new List<JibTrimRequest>();
             SquareTrimRequests = new List<SquareTrimRequest>();
             NavigateRequests = new List<NavigateRequest>();
+            BailRequests     = new List<BailRequest>();
             crewWinchInstructions = new Dictionary<GPButtonRopeWinch, WinchTarget>();
 
             // Rebuild the AllSails group; keep user-created groups intact.
@@ -403,6 +405,18 @@ namespace SailwindVirtualCrew
             NavigateRequests.Remove(request);
         }
 
+        public void AddBailRequest(BailRequest request)
+        {
+            BailRequests.Add(request);
+        }
+
+        public void CancelBailRequest(BailRequest request)
+        {
+            if (request.AssignedCrewman != null)
+                request.AssignedCrewman.CurrentTask = null;
+            BailRequests.Remove(request);
+        }
+
         public void CancelSquareTrimRequest(SquareTrimRequest request)
         {
             if (request.AssignedCrewman  != null) request.AssignedCrewman.CurrentTask  = null;
@@ -584,6 +598,23 @@ namespace SailwindVirtualCrew
                 }
             }
             NavigateRequests.RemoveAll(r => r.Status == WorkRequestStatus.Complete);
+
+            // Bail requests: tick active ones, then assign free deckhands to open ones.
+            foreach (var bail in BailRequests)
+            {
+                if (bail.Status == WorkRequestStatus.InProgress)
+                    bail.Tick();
+            }
+
+            BailRequests.RemoveAll(r => r.Status == WorkRequestStatus.Complete);
+
+            foreach (var bail in BailRequests)
+            {
+                if (bail.Status != WorkRequestStatus.Open) continue;
+                var crewman = Crew.FirstOrDefault(c => !c.IsOccupied && c.Role == ShipRole.Deckhand);
+                if (crewman == null) break;
+                bail.Begin(crewman);
+            }
         }
 
         // Called every frame from Plugin.Update(). Drives the per-frame evaluation logic
