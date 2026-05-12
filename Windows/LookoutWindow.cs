@@ -54,15 +54,21 @@ namespace SailwindVirtualCrew
 
             if (lookout == null)
             {
-                GUILayout.Label("No lookout in crew.");
+                var freshest = manager.FreshestCrewman(ShipRole.Lookout);
+                GUI.enabled = freshest != null;
+                if (GUILayout.Button(freshest != null ? $"Assign freshest Lookout ({freshest.Name})" : "Assign freshest Lookout"))
+                    manager.StartLookout(freshest);
+                GUI.enabled = true;
+                if (freshest == null)
+                    GUILayout.Label("No lookout in crew.");
                 GUI.DragWindow();
                 return;
             }
 
             if (DeveloperMode.IsEnabled)
-                GUILayout.Label($"Lookout: {lookout.Name}   D{lookout.Dexterity}  W{lookout.Wisdom}");
+                GUILayout.Label($"Lookout: {lookout.Name}  [{lookout.FatigueTag}]   D{lookout.Dexterity}  W{lookout.Wisdom}");
             else
-                GUILayout.Label($"Lookout: {lookout.Name}   D{lookout.AdvDexterity}  W{lookout.AdvWisdom}");
+                GUILayout.Label($"Lookout: {lookout.Name}  [{lookout.FatigueTag}]   D{lookout.AdvDexterity}  W{lookout.AdvWisdom}");
 
             // ── Spyglass ─────────────────────────────────────────────────────
             if (GUILayout.Button("Scan for Spyglass"))

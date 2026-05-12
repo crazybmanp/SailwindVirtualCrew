@@ -151,6 +151,21 @@ namespace SailwindVirtualCrew
 
             EnsureTextures();
 
+            // ── Pilot assignment ───────────────────────────────────────────
+            var activePilotTask = VirtualCrewManager.Instance.ActivePilotTask;
+            if (activePilotTask != null)
+            {
+                GUILayout.Label($"Pilot: {activePilotTask.AssignedCrewman.Name}  [{activePilotTask.AssignedCrewman.FatigueTag}]");
+            }
+            else
+            {
+                var freshest = VirtualCrewManager.Instance.FreshestCrewman(ShipRole.Pilot);
+                GUI.enabled = freshest != null;
+                if (GUILayout.Button(freshest != null ? $"Assign freshest Pilot ({freshest.Name})" : "Assign freshest Pilot"))
+                    VirtualCrewManager.Instance.StartPilot(freshest);
+                GUI.enabled = true;
+            }
+
             float  currentHeading = GetCurrentHeading();
             float? helmTarget     = controller.TargetHeading;
 

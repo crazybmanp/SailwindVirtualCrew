@@ -141,6 +141,9 @@ namespace SailwindVirtualCrew
         {
             foreach (var c in Crew)
                 c.CurrentTask = null;
+            ActivePilotTask   = null;
+            ActiveLookoutTask = null;
+            _assignedNavigator = null;
             isCrewActive = false;
             simpleSails = new List<SimpleSail>();
             dualSheetSails = new List<DualSheetSail>();
@@ -166,9 +169,50 @@ namespace SailwindVirtualCrew
                 SailGroups.Insert(0, AllSailsGroup);
         }
 
-        public Crewman Pilot     => Crew.FirstOrDefault(c => c.Role == ShipRole.Pilot);
-        public Crewman Navigator => Crew.FirstOrDefault(c => c.Role == ShipRole.Navigator);
-        public Crewman Lookout   => Crew.FirstOrDefault(c => c.Role == ShipRole.Lookout);
+        public PilotTask   ActivePilotTask   { get; private set; }
+        public LookoutTask ActiveLookoutTask { get; private set; }
+        private Crewman _assignedNavigator;
+
+        public Crewman Pilot     => ActivePilotTask?.AssignedCrewman;
+        public Crewman Navigator => _assignedNavigator ?? Crew.FirstOrDefault(c => c.Role == ShipRole.Navigator);
+        public Crewman Lookout   => ActiveLookoutTask?.AssignedCrewman;
+
+        // Returns the crew member of the given role with the highest stamina ratio.
+        public Crewman FreshestCrewman(ShipRole role) =>
+            Crew.Where(c => c.Role == role && !c.IsOccupied)
+                .OrderByDescending(c => (float)c.CurrentStamina / c.MaxStamina)
+                .FirstOrDefault();
+
+        public void StartPilot(Crewman crewman)
+        {
+            if (crewman.IsOccupied) return;
+            StopPilot();
+            ActivePilotTask = new PilotTask(crewman);
+        }
+
+        public void StopPilot()
+        {
+            ActivePilotTask?.Cancel();
+            ActivePilotTask = null;
+        }
+
+        public void StartLookout(Crewman crewman)
+        {
+            if (crewman.IsOccupied) return;
+            StopLookout();
+            ActiveLookoutTask = new LookoutTask(crewman);
+        }
+
+        public void StopLookout()
+        {
+            ActiveLookoutTask?.Cancel();
+            ActiveLookoutTask = null;
+        }
+
+        public void AssignNavigator(Crewman crewman)
+        {
+            _assignedNavigator = crewman;
+        }
 
         /// <summary>
         ///  Deprecated for now, since we have developer commands to add randomized crew
@@ -257,6 +301,11 @@ namespace SailwindVirtualCrew
         {
             var navReq = NavigateRequests.FirstOrDefault(r => r.Navigator == c);
             if (navReq != null) CancelNavigateRequest(navReq);
+            if (ActivePilotTask?.AssignedCrewman == c)   StopPilot();
+            if (ActiveLookoutTask?.AssignedCrewman == c) StopLookout();
+            if (_assignedNavigator == c) _assignedNavigator = null;
+            var sleepReq = SleepRequests.FirstOrDefault(r => r.AssignedCrewman == c);
+            if (sleepReq != null) CancelSleepRequest(sleepReq);
             c.CurrentTask = null;
             Crew.Remove(c);
             if (CurrentPort != null)

@@ -89,9 +89,21 @@ namespace SailwindVirtualCrew
                     selectedShipCrew.Rename(crewRenameBuffer.Trim());
                 GUILayout.EndHorizontal();
                 GUI.enabled = !selectedShipCrew.IsOccupied;
-                if (GUILayout.Button($"Sleep"))
+                if (GUILayout.Button("Sleep"))
                     mgr.AddSleepRequest(selectedShipCrew);
                 GUI.enabled = true;
+                if (selectedShipCrew.Role == ShipRole.Pilot)
+                {
+                    GUI.enabled = !selectedShipCrew.IsOccupied;
+                    if (GUILayout.Button("Start Piloting"))
+                        mgr.StartPilot(selectedShipCrew);
+                    GUI.enabled = true;
+                }
+                if (selectedShipCrew.Role == ShipRole.Navigator)
+                {
+                    if (GUILayout.Button("Assign as Navigator"))
+                        mgr.AssignNavigator(selectedShipCrew);
+                }
                 if (mgr.CurrentPort != null && GUILayout.Button($"Fire {selectedShipCrew.Name}"))
                 {
                     mgr.FireCrew(selectedShipCrew);

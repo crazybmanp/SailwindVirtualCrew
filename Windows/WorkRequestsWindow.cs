@@ -38,10 +38,14 @@ namespace SailwindVirtualCrew
             var squareTrimRequests = manager.SquareTrimRequests;
             var navigateRequests   = manager.NavigateRequests;
             var sleepRequests      = manager.SleepRequests;
+            var pilotTask          = manager.ActivePilotTask;
+            var lookoutTask        = manager.ActiveLookoutTask;
 
             int totalTasks = requests.Count + trimRequests.Count
                            + jibTrimRequests.Count + squareTrimRequests.Count
-                           + navigateRequests.Count + sleepRequests.Count;
+                           + navigateRequests.Count + sleepRequests.Count
+                           + (pilotTask   != null ? 1 : 0)
+                           + (lookoutTask != null ? 1 : 0);
 
             float taskListHeight;
             if (totalTasks == 0)
@@ -71,6 +75,8 @@ namespace SailwindVirtualCrew
                 foreach (var r in sleepRequests)
                     taskListHeight += r.Status == WorkRequestStatus.InProgress
                         ? InProgressTaskHeight : OpenTaskHeight;
+                if (pilotTask   != null) taskListHeight += OpenTaskHeight;
+                if (lookoutTask != null) taskListHeight += OpenTaskHeight;
             }
 
             windowRect.height = BaseContentHeight + ButtonHeight + taskListHeight; // ButtonHeight for "Tasks" label
@@ -89,12 +95,15 @@ namespace SailwindVirtualCrew
             var squareTrimRequests = manager.SquareTrimRequests;
             var navigateRequests   = manager.NavigateRequests;
             var sleepRequests      = manager.SleepRequests;
+            var pilotTask          = manager.ActivePilotTask;
+            var lookoutTask        = manager.ActiveLookoutTask;
 
             GUILayout.Label("Tasks");
 
             if (requests.Count == 0 && trimRequests.Count == 0
              && jibTrimRequests.Count == 0 && squareTrimRequests.Count == 0
-             && navigateRequests.Count == 0 && sleepRequests.Count == 0)
+             && navigateRequests.Count == 0 && sleepRequests.Count == 0
+             && pilotTask == null && lookoutTask == null)
             {
                 GUILayout.Label("No tasks queued.");
                 GUI.DragWindow();
@@ -259,6 +268,22 @@ namespace SailwindVirtualCrew
                 }
             }
             if (sleepToCancel != null) manager.CancelSleepRequest(sleepToCancel);
+
+            if (pilotTask != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"[{pilotTask.AssignedCrewman.Name}] On Pilot Duty");
+                if (GUILayout.Button("X", GUILayout.Width(22))) manager.StopPilot();
+                GUILayout.EndHorizontal();
+            }
+
+            if (lookoutTask != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"[{lookoutTask.AssignedCrewman.Name}] On Watch");
+                if (GUILayout.Button("X", GUILayout.Width(22))) manager.StopLookout();
+                GUILayout.EndHorizontal();
+            }
 
             GUI.DragWindow();
         }
