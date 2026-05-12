@@ -82,6 +82,7 @@ Strongly inspired by:
 #### Deckhands
 
 - Can operate bilge pumps
+- Can repair ships with Oakum
 
 #### Chief Officer
 
