@@ -17,6 +17,7 @@ namespace SailwindVirtualCrew
         private Crewman selectedShipCrew  = null;
         private Crewman selectedAvailable = null;
         private string  crewRenameBuffer  = "";
+        private bool    _renamingShipCrew = false;
 
         private int? bedCount = null;
 
@@ -79,19 +80,32 @@ namespace SailwindVirtualCrew
                 string label = sel ? $"► {c.Name}  ({c.Role}){fatigue}" : $"  {c.Name}  ({c.Role}){fatigue}";
                 if (GUILayout.Button(label))
                 {
-                    if (sel) { selectedShipCrew = null; crewRenameBuffer = ""; }
-                    else     { selectedShipCrew = c;    crewRenameBuffer = c.Name; selectedAvailable = null; }
+                    if (sel) { selectedShipCrew = null; crewRenameBuffer = ""; _renamingShipCrew = false; }
+                    else     { selectedShipCrew = c;    crewRenameBuffer = c.Name; selectedAvailable = null; _renamingShipCrew = false; }
                 }
             }
             if (selectedShipCrew != null)
             {
                 GUILayout.Label(StatLine(selectedShipCrew));
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("Name:", GUILayout.Width(52));
-                crewRenameBuffer = GUILayout.TextField(crewRenameBuffer);
-                if (GUILayout.Button("Set", GUILayout.Width(46)) && crewRenameBuffer.Trim().Length > 0)
-                    selectedShipCrew.Rename(crewRenameBuffer.Trim());
-                GUILayout.EndHorizontal();
+                if (!_renamingShipCrew)
+                {
+                    if (GUILayout.Button("Rename", GUILayout.Width(80)))
+                    {
+                        _renamingShipCrew = true;
+                        crewRenameBuffer = selectedShipCrew.Name;
+                    }
+                }
+                else
+                {
+                    GUILayout.BeginHorizontal();
+                    crewRenameBuffer = GUILayout.TextField(crewRenameBuffer);
+                    if (GUILayout.Button("Set", GUILayout.Width(46)) && crewRenameBuffer.Trim().Length > 0)
+                    {
+                        selectedShipCrew.Rename(crewRenameBuffer.Trim());
+                        _renamingShipCrew = false;
+                    }
+                    GUILayout.EndHorizontal();
+                }
                 GUI.enabled = !selectedShipCrew.IsOccupied;
                 if (GUILayout.Button("Sleep"))
                     mgr.AddSleepRequest(selectedShipCrew);
@@ -113,6 +127,7 @@ namespace SailwindVirtualCrew
                     mgr.FireCrew(selectedShipCrew);
                     selectedShipCrew = null;
                     crewRenameBuffer = "";
+                    _renamingShipCrew = false;
                 }
             }
 
@@ -137,6 +152,7 @@ namespace SailwindVirtualCrew
                         selectedAvailable = sel ? null : c;
                         selectedShipCrew  = null;
                         crewRenameBuffer  = "";
+                        _renamingShipCrew = false;
                     }
                 }
                 if (selectedAvailable != null)

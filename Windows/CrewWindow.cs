@@ -17,6 +17,8 @@ namespace SailwindVirtualCrew
         private ICommonSailActions selectedSail = null;
         private string renameBuffer = "";
         private string vesselRenameBuffer = "";
+        private bool   _renamingSail   = false;
+        private bool   _renamingVessel = false;
 
         private const float ButtonHeight      = 28f;
         private const float BaseContentHeight = 600f;
@@ -37,8 +39,9 @@ namespace SailwindVirtualCrew
 
             if (selectedSail != null && !sails.Contains(selectedSail))
             {
-                selectedSail = null;
-                renameBuffer = "";
+                selectedSail  = null;
+                renameBuffer  = "";
+                _renamingSail = false;
             }
 
             float sailListHeight = sails.Count > 0 ? sails.Count * ButtonHeight : 40f;
@@ -80,17 +83,25 @@ namespace SailwindVirtualCrew
                                  : !string.IsNullOrEmpty(vesselKey)      ? vesselKey
                                  : "(No vessel — press V to scan)";
             GUILayout.Label($"Vessel: {vesselDisplay}");
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Name:", GUILayout.Width(66));
-            vesselRenameBuffer = GUILayout.TextField(vesselRenameBuffer);
-            if (GUILayout.Button("Set",   GUILayout.Width(46)) && vesselRenameBuffer.Trim().Length > 0)
-                manager.SetVesselFriendlyName(vesselRenameBuffer.Trim());
-            if (GUILayout.Button("Clear", GUILayout.Width(54)))
+            if (!_renamingVessel)
             {
-                manager.SetVesselFriendlyName("");
-                vesselRenameBuffer = "";
+                if (GUILayout.Button("Rename", GUILayout.Width(80)))
+                {
+                    _renamingVessel    = true;
+                    vesselRenameBuffer = vesselFriendly ?? "";
+                }
             }
-            GUILayout.EndHorizontal();
+            else
+            {
+                GUILayout.BeginHorizontal();
+                vesselRenameBuffer = GUILayout.TextField(vesselRenameBuffer);
+                if (GUILayout.Button("Set", GUILayout.Width(46)) && vesselRenameBuffer.Trim().Length > 0)
+                {
+                    manager.SetVesselFriendlyName(vesselRenameBuffer.Trim());
+                    _renamingVessel = false;
+                }
+                GUILayout.EndHorizontal();
+            }
 
             // ── Anchor ──────────────────────────────────────────────────────
             var anchors = manager.AnchorWinches;
@@ -122,8 +133,8 @@ namespace SailwindVirtualCrew
                     GUI.color = (sail == selectedSail) ? Color.cyan : Color.white;
                     if (GUILayout.Button(sail.getSailName()))
                     {
-                        if (sail == selectedSail) { selectedSail = null; renameBuffer = ""; }
-                        else                      { selectedSail = sail; renameBuffer = sail.FriendlyName ?? ""; }
+                        if (sail == selectedSail) { selectedSail = null; renameBuffer = ""; _renamingSail = false; }
+                        else                      { selectedSail = sail; renameBuffer = sail.FriendlyName ?? ""; _renamingSail = false; }
                     }
                     GUI.color = Color.white;
                 }
@@ -137,17 +148,25 @@ namespace SailwindVirtualCrew
                 GUILayout.Space(4);
                 GUILayout.Label($"Commands: {selectedSail.getSailName()}");
 
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("Name:", GUILayout.Width(66));
-                renameBuffer = GUILayout.TextField(renameBuffer);
-                if (GUILayout.Button("Set",   GUILayout.Width(46)) && renameBuffer.Trim().Length > 0)
-                    manager.SetSailFriendlyName(selectedSail, renameBuffer.Trim());
-                if (GUILayout.Button("Clear", GUILayout.Width(54)))
+                if (!_renamingSail)
                 {
-                    manager.SetSailFriendlyName(selectedSail, "");
-                    renameBuffer = "";
+                    if (GUILayout.Button("Rename", GUILayout.Width(80)))
+                    {
+                        _renamingSail = true;
+                        renameBuffer  = selectedSail.FriendlyName ?? "";
+                    }
                 }
-                GUILayout.EndHorizontal();
+                else
+                {
+                    GUILayout.BeginHorizontal();
+                    renameBuffer = GUILayout.TextField(renameBuffer);
+                    if (GUILayout.Button("Set", GUILayout.Width(46)) && renameBuffer.Trim().Length > 0)
+                    {
+                        manager.SetSailFriendlyName(selectedSail, renameBuffer.Trim());
+                        _renamingSail = false;
+                    }
+                    GUILayout.EndHorizontal();
+                }
 
                 if (selectedGroup != null && !selectedGroup.IsAllSails)
                 {

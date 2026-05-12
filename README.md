@@ -124,6 +124,7 @@ Tools:
 #### Quartermaster
 
 - Manages repairs
+- Can fill up a few barrels of water at larger ports from wells for free (not unlimited; at some point people don't let you hog all the water)
 
 ### UI / UX
 

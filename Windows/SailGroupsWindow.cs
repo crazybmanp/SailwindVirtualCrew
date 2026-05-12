@@ -17,6 +17,7 @@ namespace SailwindVirtualCrew
         public void SetPosition(float x, float y, float userHeight) { windowRect.x = x; windowRect.y = y; _resizer.UserHeight = userHeight; }
 
         private string groupNameBuffer = "";
+        private bool   _renamingGroup  = false;
 
         private const float ButtonHeight      = 28f;
         private const float BaseContentHeight = 300f;
@@ -41,6 +42,7 @@ namespace SailwindVirtualCrew
                 manager.SelectedGroup = null;
                 selectedGroup         = null;
                 groupNameBuffer       = "";
+                _renamingGroup        = false;
             }
 
             // Height accounting
@@ -79,6 +81,7 @@ namespace SailwindVirtualCrew
                 var newGroup = manager.CreateSailGroup("New Group");
                 manager.SelectedGroup = newGroup;
                 groupNameBuffer       = newGroup.Name;
+                _renamingGroup        = true;
             }
             GUILayout.EndHorizontal();
 
@@ -89,8 +92,8 @@ namespace SailwindVirtualCrew
                 GUI.color = (group == selectedGroup) ? Color.cyan : Color.white;
                 if (GUILayout.Button(group.Name))
                 {
-                    if (group == selectedGroup) { manager.SelectedGroup = null; groupNameBuffer = ""; }
-                    else                        { manager.SelectedGroup = group; groupNameBuffer = group.Name; }
+                    if (group == selectedGroup) { manager.SelectedGroup = null; groupNameBuffer = ""; _renamingGroup = false; }
+                    else                        { manager.SelectedGroup = group; groupNameBuffer = group.Name; _renamingGroup = false; }
                 }
                 GUI.color   = Color.white;
                 GUI.enabled = !group.IsAllSails;
@@ -100,7 +103,7 @@ namespace SailwindVirtualCrew
             }
             if (groupToDelete != null)
             {
-                if (selectedGroup == groupToDelete) groupNameBuffer = "";
+                if (selectedGroup == groupToDelete) { groupNameBuffer = ""; _renamingGroup = false; }
                 manager.DeleteSailGroup(groupToDelete); // also clears SelectedGroup if needed
                 selectedGroup = manager.SelectedGroup;
             }
@@ -111,12 +114,25 @@ namespace SailwindVirtualCrew
             {
                 GUILayout.Space(2);
 
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("Name:", GUILayout.Width(52));
-                groupNameBuffer = GUILayout.TextField(groupNameBuffer);
-                if (GUILayout.Button("Set", GUILayout.Width(46)) && groupNameBuffer.Trim().Length > 0)
-                    selectedGroup.Name = groupNameBuffer.Trim();
-                GUILayout.EndHorizontal();
+                if (!_renamingGroup)
+                {
+                    if (GUILayout.Button("Rename", GUILayout.Width(80)))
+                    {
+                        _renamingGroup  = true;
+                        groupNameBuffer = selectedGroup.Name;
+                    }
+                }
+                else
+                {
+                    GUILayout.BeginHorizontal();
+                    groupNameBuffer = GUILayout.TextField(groupNameBuffer);
+                    if (GUILayout.Button("Set", GUILayout.Width(46)) && groupNameBuffer.Trim().Length > 0)
+                    {
+                        selectedGroup.Name = groupNameBuffer.Trim();
+                        _renamingGroup     = false;
+                    }
+                    GUILayout.EndHorizontal();
+                }
 
                 DrawGroupCommandPanel(manager, selectedGroup, sails);
             }
