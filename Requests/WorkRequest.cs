@@ -65,6 +65,7 @@ namespace SailwindVirtualCrew
 
         public float PositioningTimeTotal { get; private set; }
         private float positioningStartTime;
+        private bool concretePositioning;
 
         public WorkRequest(ICommonSailActions sail, string commandName, params WinchTarget[] targets)
         {
@@ -78,22 +79,46 @@ namespace SailwindVirtualCrew
         {
             PositioningTimeTotal = 7 - crewman.Dexterity;
             positioningStartTime = Time.time;
+            concretePositioning = Targets.Length > 0
+                && CrewNavigationCoordinator.Instance.TryBeginWinchPositioning(this, crewman, Targets[0].Winch);
             Status = WorkRequestStatus.Positioning;
         }
 
         public bool IsPositioningComplete()
-            => Time.time >= positioningStartTime + PositioningTimeTotal;
+        {
+            if (concretePositioning)
+                return CrewNavigationCoordinator.Instance.IsPositioningComplete(this);
+
+            return Time.time >= positioningStartTime + PositioningTimeTotal;
+        }
 
         // 100 = just started (full bar), 0 = arrived (empty bar) — drains continuously.
         public float GetPositioningProgress() =>
-            PositioningTimeTotal <= 0f ? 0f
-                : Mathf.Clamp01(1f - (Time.time - positioningStartTime) / PositioningTimeTotal) * 100f;
+            concretePositioning
+                ? CrewNavigationCoordinator.Instance.GetPositioningProgress(this)
+                : PositioningTimeTotal <= 0f ? 0f
+                    : Mathf.Clamp01(1f - (Time.time - positioningStartTime) / PositioningTimeTotal) * 100f;
 
         public void Begin()
         {
+            if (concretePositioning)
+            {
+                CrewNavigationCoordinator.Instance.Complete(this);
+                concretePositioning = false;
+            }
+
             foreach (var t in Targets)
                 t.RecordStart();
             Status = WorkRequestStatus.InProgress;
+        }
+
+        public void CancelPositioning()
+        {
+            if (!concretePositioning)
+                return;
+
+            CrewNavigationCoordinator.Instance.Cancel(this);
+            concretePositioning = false;
         }
 
         public string DisplayLabel => Sail != null ? $"{CommandName} — {Sail.getSailName()}" : CommandName;

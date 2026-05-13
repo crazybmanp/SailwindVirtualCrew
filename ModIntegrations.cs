@@ -3,6 +3,7 @@ using HarmonyLib;
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace SailwindVirtualCrew
@@ -53,22 +54,18 @@ namespace SailwindVirtualCrew
 
             try
             {
-                var patchesType = AccessTools.TypeByName("ProfitPercent.ProfitPercentPatches");
-                if (patchesType == null)
+                var showGoodPage = AccessTools.Method(typeof(EconomyUI), "ShowGoodPage");
+                if (showGoodPage == null)
                 {
-                    Debug.LogWarning("[VirtualCrew] ProfitPercent found but ProfitPercentPatches type not located.");
+                    Debug.LogWarning("[VirtualCrew] ProfitPercent found but EconomyUI.ShowGoodPage not located.");
                     return;
                 }
 
-                var mainPatch = patchesType.GetMethod("MainPatch", BindingFlags.Public | BindingFlags.Static);
-                if (mainPatch == null)
-                {
-                    Debug.LogWarning("[VirtualCrew] ProfitPercentPatches.MainPatch not found.");
-                    return;
-                }
-
-                harmony.Patch(mainPatch, prefix: new HarmonyMethod(
-                    typeof(ProfitPercentGate), nameof(ProfitPercentGate.MainPatchPrefix)));
+                // Postfix at Low priority so we run after ProfitPercent's Normal-priority postfix,
+                // then clear the columns it populated if no Supercargo is hired.
+                harmony.Patch(showGoodPage, postfix: new HarmonyMethod(
+                    typeof(ProfitPercentGate), nameof(ProfitPercentGate.ShowGoodPagePostfix))
+                { priority = Priority.Low });
                 Debug.Log("[VirtualCrew] ProfitPercent gated: Supercargo required.");
             }
             catch (Exception ex)
@@ -98,16 +95,18 @@ namespace SailwindVirtualCrew
             "bdBestDeals", "bdPercent", "bdPerPound", "bdAbsolute"
         };
 
-        // Blocks ProfitPercentPatches.MainPatch (EconomyUI.ShowGoodPage postfix)
-        // unless a Supercargo is hired. Clears columns so no stale data shows.
-        public static bool MainPatchPrefix()
+        private static readonly FieldInfo textProfitField =
+            AccessTools.Field(typeof(EconomyUI), "textProfit");
+
+        // Runs after ProfitPercent's postfix on EconomyUI.ShowGoodPage.
+        // Clears the mod columns and strips color tags from the base profit column.
+        public static void ShowGoodPagePostfix()
         {
             var mgr = VirtualCrewManager.Instance;
-            if (mgr == null) return true; // before save loaded
-            if (mgr.Crew.Any(c => c.Role == ShipRole.Supercargo)) return true;
-
+            if (mgr == null) return;
+            if (mgr.Crew.Any(c => c.Role == ShipRole.Supercargo)) return;
             ClearProfitColumns();
-            return false;
+            StripProfitColors();
         }
 
         private static void ClearProfitColumns()
@@ -124,6 +123,14 @@ namespace SailwindVirtualCrew
                 if (tm != null) tm.text = "";
             }
             detailsUI.Find("highlightBar")?.gameObject.SetActive(false);
+        }
+
+        private static void StripProfitColors()
+        {
+            if (EconomyUI.instance == null) return;
+            var tm = textProfitField?.GetValue(EconomyUI.instance) as TextMesh;
+            if (tm == null) return;
+            tm.text = Regex.Replace(tm.text, @"<[^>]+>", "");
         }
     }
 }

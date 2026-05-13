@@ -122,9 +122,19 @@ namespace SailwindVirtualCrew
                     if (GUILayout.Button("Assign as Navigator"))
                         mgr.AssignNavigator(selectedShipCrew);
                 }
+                if (GUILayout.Button("Set Rest Location"))
+                    SetRestLocation(mgr, selectedShipCrew);
                 if (mgr.CurrentPort != null && GUILayout.Button($"Fire {selectedShipCrew.Name}"))
                 {
                     mgr.FireCrew(selectedShipCrew);
+                    selectedShipCrew = null;
+                    crewRenameBuffer = "";
+                    _renamingShipCrew = false;
+                }
+                else if (DeveloperMode.IsEnabled && GUILayout.Button($"Remove {selectedShipCrew.Name}"))
+                {
+                    selectedShipCrew.CurrentTask = null;
+                    mgr.Crew.Remove(selectedShipCrew);
                     selectedShipCrew = null;
                     crewRenameBuffer = "";
                     _renamingShipCrew = false;
@@ -175,6 +185,21 @@ namespace SailwindVirtualCrew
             if (DeveloperMode.IsEnabled)
                 return $"{c.TrueStatLine()}    Stamina: {c.CurrentStamina:F1}/{c.MaxStamina}";
             return c.AdvertisedStatLine();
+        }
+
+        private static void SetRestLocation(VirtualCrewManager mgr, Crewman crewman)
+        {
+            var context = CrewBoatContextResolver.ResolveAndLog();
+            if (context == null || Refs.observerMirror == null)
+                return;
+
+            var mapper = new CrewSpaceMapper(context);
+            var playerTransform = Refs.observerMirror.transform;
+            Vector3 localPosition = mapper.WorldBoatLocalFromWorld(playerTransform.position);
+            Quaternion localRotation = mapper.WorldBoatLocalRotationFromWorld(playerTransform.rotation);
+            mgr.SetCrewRestLocation(crewman, localPosition, localRotation);
+            CrewNavigationCoordinator.Instance.OnRestLocationChanged(crewman);
+            CrewDebugLog.Ok("RuntimeNav", "Set rest location crew='" + crewman.Name + "'");
         }
     }
 }

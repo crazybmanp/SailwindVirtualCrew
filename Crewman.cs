@@ -4,6 +4,7 @@ namespace SailwindVirtualCrew
 {
     public class Crewman
     {
+        public string   Id { get; private set; }
         public string   Name { get; private set; }
         public ShipRole Role { get; }
 
@@ -63,6 +64,7 @@ namespace SailwindVirtualCrew
 
         public Crewman(string name, ShipRole role, Random rng)
         {
+            Id           = Guid.NewGuid().ToString("N");
             Name         = name;
             Role         = role;
             _strength    = rng.Next(1, 6);
@@ -87,8 +89,10 @@ namespace SailwindVirtualCrew
         public Crewman(string name, ShipRole role,
             int strength, int dexterity, int constitution, int intelligence, int wisdom, int charisma,
             int advStrength, int advDexterity, int advConstitution, int advIntelligence, int advWisdom, int advCharisma,
-            float currentStamina = -1f)
+            float currentStamina = -1f,
+            string id = null)
         {
+            Id           = string.IsNullOrEmpty(id) ? Guid.NewGuid().ToString("N") : id;
             Name         = name;
             Role         = role;
             _strength    = strength;
@@ -149,6 +153,7 @@ namespace SailwindVirtualCrew
 
         public CrewmanSaveData ToSaveData() => new CrewmanSaveData
         {
+            id = Id,
             name = Name, role = Role,
             strength = _strength, dexterity = _dexterity, constitution = Constitution,
             intelligence = _intelligence, wisdom = _wisdom, charisma = _charisma,

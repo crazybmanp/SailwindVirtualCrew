@@ -29,6 +29,7 @@ namespace SailwindVirtualCrew
 
         private GPButtonRopeWinch winch1;
         private GPButtonRopeWinch winch2;
+        public GPButtonRopeWinch SecondWinch { get; private set; }
         private WinchTarget activeTarget;
 
         private float w1StartPos, w1ScanInPos, w1ScanOutPos;
@@ -90,6 +91,7 @@ namespace SailwindVirtualCrew
             {
                 winch1 = port;
                 winch2 = starboard;
+                SecondWinch = starboard;
                 doSecondWinch = true;
             }
 
@@ -171,7 +173,9 @@ namespace SailwindVirtualCrew
                     break;
 
                 case JibTrimPhase.Repositioning:
-                    if (Time.time >= repositioningStart + repositioningDuration)
+                    // Driven externally via BeginSecondWinch() once the NPC arrives.
+                    // Fall back to timer only when SecondWinch is null (nav unavailable).
+                    if (SecondWinch == null && Time.time >= repositioningStart + repositioningDuration)
                         StartW2Scan();
                     break;
 
@@ -208,6 +212,8 @@ namespace SailwindVirtualCrew
             phase = JibTrimPhase.W1ScanIn;
             VirtualCrewManager.Instance.crewWinchInstructions[winch1] = activeTarget;
         }
+
+        public void BeginSecondWinch() => StartW2Scan();
 
         private void StartW2Scan()
         {

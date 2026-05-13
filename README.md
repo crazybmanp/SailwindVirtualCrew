@@ -88,7 +88,11 @@ Tools:
 ### Crew (General)
 
 - Crew should require wages, paid out periodically.
+  - Deckhands: 10 AA or equivalent daily? Missions pay out about 25 for a 1 day journey, and the player can start by taking 2 missions. 
+    - If the player is making about 50 coins a day, then having 1 deckhand take 20% of that seems reasonable. 
+    - With cost of food and water that's probably closer to 30% or more.
 - Crew should require food, eaten daily.
+  - Player needs about 8 units of water daily? And a barrel is about 20 coins and holds 60 units, so this also increasts costs by about 2.5 AA coins per day per crew
 
 ### Crew Roles
 
@@ -115,6 +119,7 @@ Tools:
   - Not sure how the latter would work with scrambled seas...
   - Note that a bad lat/lon might mean they make a mistake and name it incorrectly!
 - Some way to "Announce" when land sighted when coming in from the ocean
+- Maybe some kind of proximity warning for things right in front of you?
 
 #### Chef
 
@@ -143,6 +148,7 @@ Tools:
   - Chief Officer
   - Chef
 - Window sizes are wrong and initial placement is poor.
+- Can see Water % even without Quartermaster
 
 ---
 

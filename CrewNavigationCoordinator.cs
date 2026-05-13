@@ -1,0 +1,708 @@
+using System.Collections.Generic;
+using System.Linq;
+using HarmonyLib;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace SailwindVirtualCrew
+{
+    internal sealed class CrewNavigationCoordinator
+    {
+        private const string Phase = "RuntimeNav";
+        private static readonly CrewNavigationCoordinator _instance = new CrewNavigationCoordinator();
+
+        internal static CrewNavigationCoordinator Instance => _instance;
+
+        private CrewBoatContext _context;
+        private ProxyBoat _proxyBoat;
+        private ProxyNavMeshNavigationProvider _navMeshProvider;
+        private List<CrewStation> _stations = new List<CrewStation>();
+        private readonly Dictionary<Crewman, RuntimeActor> _actorsByCrew = new Dictionary<Crewman, RuntimeActor>();
+        private readonly Dictionary<object, RuntimeActor> _actorsByOwner = new Dictionary<object, RuntimeActor>();
+        private readonly System.Random _random = new System.Random();
+
+        private CrewNavigationCoordinator()
+        {
+        }
+
+        internal void Tick()
+        {
+            EnsureRestActors();
+            foreach (var actor in _actorsByCrew.Values.ToList())
+                actor.Tick();
+        }
+
+        internal void OnRestLocationChanged(Crewman crewman)
+        {
+            if (crewman == null || !EnsureRuntimeReady())
+                return;
+
+            var actor = GetOrCreateActor(crewman);
+            actor?.RefreshRestLocation();
+        }
+
+        internal bool TryBeginWinchPositioning(object owner, Crewman crewman, GPButtonRopeWinch winch)
+        {
+            if (owner == null || crewman == null || !winch)
+                return false;
+
+            if (_actorsByOwner.ContainsKey(owner))
+                return true;
+
+            if (!EnsureRuntimeReady())
+                return false;
+
+            var actor = GetOrCreateActor(crewman);
+            if (actor == null)
+            {
+                CrewDebugLog.Warn(Phase, "No concrete actor available; falling back to simulated positioning.");
+                return false;
+            }
+
+            if (actor.ActiveOwner != null)
+            {
+                CrewDebugLog.Warn(Phase, "Concrete actor is busy for crew='" + crewman.Name + "'; falling back to simulated positioning.");
+                return false;
+            }
+
+            var station = FindStationForWinch(winch, actor);
+            if (station == null)
+            {
+                CrewDebugLog.Warn(Phase, "No projected station found for winch='" + winch.name + "'; falling back to simulated positioning.");
+                return false;
+            }
+
+            actor.Begin(owner, station, winch);
+            _actorsByOwner[owner] = actor;
+            return true;
+        }
+
+        internal void BeginPilot(PilotTask task)
+        {
+            if (task == null || task.AssignedCrewman == null || !EnsureRuntimeReady())
+                return;
+
+            var actor = GetOrCreateActor(task.AssignedCrewman);
+            if (actor == null || actor.ActiveOwner != null)
+                return;
+
+            var station = FindClosestStation("helm", actor.CurrentLocalPosition);
+            if (station == null)
+            {
+                CrewDebugLog.Warn(Phase, "No helm station found for pilot crew='" + task.AssignedCrewman.Name + "'.");
+                return;
+            }
+
+            if (actor.BeginRole(task, station.ProjectedLocalStand, GetBowRotation(), "pilot helm='" + station.Id + "'"))
+                _actorsByOwner[task] = actor;
+        }
+
+        internal void BeginLookout(LookoutTask task)
+        {
+            if (task == null || task.AssignedCrewman == null || !EnsureRuntimeReady())
+                return;
+
+            var actor = GetOrCreateActor(task.AssignedCrewman);
+            if (actor == null || actor.ActiveOwner != null)
+                return;
+
+            Vector3 startLocal;
+            Quaternion startRotation;
+            if (!VirtualCrewManager.Instance.TryGetCrewRestLocation(task.AssignedCrewman, out startLocal, out startRotation))
+            {
+                startLocal = actor.CurrentLocalPosition;
+                startRotation = actor.CurrentLocalRotation;
+            }
+
+            if (actor.BeginLookout(task, startLocal, startRotation, _random))
+                _actorsByOwner[task] = actor;
+        }
+
+        internal bool IsPositioningComplete(object owner)
+        {
+            return owner != null
+                && _actorsByOwner.TryGetValue(owner, out var actor)
+                && actor.IsPositioningComplete;
+        }
+
+        internal float GetPositioningProgress(object owner)
+        {
+            if (owner == null || !_actorsByOwner.TryGetValue(owner, out var actor))
+                return 100f;
+
+            return actor.GetPositioningProgress();
+        }
+
+        internal float EstimateDistanceToWinch(Crewman crewman, GPButtonRopeWinch winch)
+        {
+            if (crewman == null || !winch || !EnsureRuntimeReady())
+                return float.MaxValue;
+
+            Vector3 fromLocal;
+            if (_actorsByCrew.TryGetValue(crewman, out var actor) && actor.IsValid)
+                fromLocal = actor.CurrentLocalPosition;
+            else if (VirtualCrewManager.Instance.TryGetCrewRestLocation(crewman, out var restLocal, out _))
+                fromLocal = restLocal;
+            else
+                fromLocal = GetDefaultStartLocal();
+
+            var station = _stations
+                .Where(s => IsStationForWinch(s, winch))
+                .OrderBy(s => Vector3.Distance(fromLocal, s.ProjectedLocalStand))
+                .FirstOrDefault();
+
+            return station == null ? float.MaxValue : Vector3.Distance(fromLocal, station.ProjectedLocalStand);
+        }
+
+        internal void Complete(object owner)
+        {
+            if (owner == null || !_actorsByOwner.TryGetValue(owner, out var actor))
+                return;
+
+            CrewDebugLog.Ok(Phase,
+                "Concrete positioning complete crew='" + actor.Crew.Name
+                + "' station='" + actor.ActiveStation.Id + "'");
+            actor.Complete();
+            _actorsByOwner.Remove(owner);
+        }
+
+        internal void Cancel(object owner)
+        {
+            if (owner == null || !_actorsByOwner.TryGetValue(owner, out var actor))
+                return;
+
+            actor.Cancel();
+            _actorsByOwner.Remove(owner);
+        }
+
+        private bool EnsureRuntimeReady()
+        {
+            _context = CrewBoatContextResolver.Resolve();
+            if (_context == null)
+                return false;
+
+            if (_proxyBoat == null || !_proxyBoat.IsValid)
+                _proxyBoat = ProxyBoatBuilder.Create(_context);
+
+            if (_navMeshProvider == null || !_navMeshProvider.IsBaked)
+            {
+                _navMeshProvider = new ProxyNavMeshNavigationProvider(_proxyBoat);
+                if (!_navMeshProvider.Bake())
+                    return false;
+            }
+
+            if (_stations == null || _stations.Count == 0)
+                _stations = new CrewStationScanner(_context, _navMeshProvider).Scan();
+
+            return true;
+        }
+
+        private RuntimeActor GetOrCreateActor(Crewman crewman)
+        {
+            if (_actorsByCrew.TryGetValue(crewman, out var actor) && actor.IsValid)
+                return actor;
+
+            Vector3 startLocal = VirtualCrewManager.Instance.TryGetCrewRestLocation(crewman, out var restPosition, out _)
+                ? restPosition
+                : GetDefaultStartLocal();
+            if (!_navMeshProvider.TryGetWorldOnNavMesh(startLocal, GetNavMeshSearchDistance(), out var startWorld))
+                return null;
+
+            actor = new RuntimeActor(crewman, _context, _navMeshProvider, startWorld);
+            _actorsByCrew[crewman] = actor;
+            CrewDebugLog.Ok(Phase, "Created concrete actor crew='" + crewman.Name + "' actors=" + _actorsByCrew.Count);
+            return actor;
+        }
+
+        private void EnsureRestActors()
+        {
+            var mgr = VirtualCrewManager.Instance;
+            bool anyRestCrew = false;
+            foreach (var crewman in mgr.Crew)
+            {
+                if (mgr.TryGetCrewRestLocation(crewman, out _, out _))
+                {
+                    anyRestCrew = true;
+                    break;
+                }
+            }
+
+            if (!anyRestCrew)
+                return;
+
+            if (!EnsureRuntimeReady())
+                return;
+
+            var currentCrew = new HashSet<Crewman>(mgr.Crew);
+            foreach (var pair in _actorsByCrew.ToList())
+            {
+                if (currentCrew.Contains(pair.Key))
+                    continue;
+
+                pair.Value.Destroy();
+                _actorsByCrew.Remove(pair.Key);
+            }
+
+            foreach (var crewman in mgr.Crew)
+            {
+                if (mgr.TryGetCrewRestLocation(crewman, out _, out _))
+                {
+                    if (!_actorsByCrew.ContainsKey(crewman))
+                        GetOrCreateActor(crewman);
+                }
+            }
+        }
+
+        private CrewStation FindStationForWinch(GPButtonRopeWinch winch, RuntimeActor actor)
+        {
+            return _stations
+                .Where(s => IsStationForWinch(s, winch))
+                .OrderBy(s => Vector3.Distance(actor.CurrentLocalPosition, s.ProjectedLocalStand))
+                .FirstOrDefault();
+        }
+
+        private CrewStation FindClosestStation(string typeName, Vector3 fromLocal)
+        {
+            return _stations
+                .Where(s => s.Projected && s.TypeName == typeName)
+                .OrderBy(s => Vector3.Distance(fromLocal, s.ProjectedLocalStand))
+                .FirstOrDefault();
+        }
+
+        private static Quaternion GetBowRotation()
+        {
+            return Quaternion.LookRotation(Vector3.right, Vector3.up);
+        }
+
+        private static bool IsStationForWinch(CrewStation station, GPButtonRopeWinch winch)
+        {
+            if (station == null || !station.Projected || !winch)
+                return false;
+
+            if (station.Control == winch)
+                return true;
+
+            var stationWinch = station.Control as GPButtonRopeWinch;
+            return stationWinch && stationWinch.rope == winch.rope;
+        }
+
+        private Vector3 GetDefaultStartLocal()
+        {
+            if (_proxyBoat != null && _proxyBoat.IsValid)
+                return _proxyBoat.Root.transform.InverseTransformPoint(_proxyBoat.Bounds.center);
+
+            return Vector3.zero;
+        }
+
+        private float GetNavMeshSearchDistance()
+        {
+            if (_proxyBoat == null || !_proxyBoat.IsValid)
+                return 12f;
+
+            return Mathf.Max(12f, _proxyBoat.Bounds.size.y + 2f);
+        }
+
+        private static float DexterityToSpeed(int dexterity)
+        {
+            return 1.6f + (dexterity - 3) * 0.3f;
+        }
+
+        private static string SafeName(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "crew";
+
+            var chars = value.Where(char.IsLetterOrDigit).ToArray();
+            return chars.Length == 0 ? "crew" : new string(chars);
+        }
+
+        private sealed class RuntimeActor
+        {
+            private readonly ProxyNavMeshNavigationProvider _navMeshProvider;
+            private readonly CrewBoatContext _context;
+            private readonly ProxyLogicAgent _logicAgent;
+            private readonly CrewAgent _visualAgent;
+            private readonly ProxyToBoatPoseSync _poseSync;
+            private float _initialDistance;
+            private bool _workingLogged;
+            private string _activeLabel;
+            private Quaternion _activeArrivalRotation;
+            private bool _hasActiveArrivalRotation;
+            private bool _lookoutActive;
+            private Vector3 _lookoutStartLocal;
+            private Quaternion _lookoutStartRotation;
+            private System.Random _lookoutRandom;
+            private float _nextLookoutDecisionTime;
+            private bool _returningToRest;
+            private Vector3 _restLocalPosition;
+            private Vector3 _restStandLocalPosition;
+            private Quaternion _restLocalRotation;
+            private bool _hasRestLocation;
+            private int _lastAppliedDexterity = -1;
+
+            internal RuntimeActor(Crewman crew, CrewBoatContext context, ProxyNavMeshNavigationProvider navMeshProvider, Vector3 startWorld)
+            {
+                Crew = crew;
+                _navMeshProvider = navMeshProvider;
+                _context = context;
+
+                string id = SafeName(crew.Name);
+                _logicAgent = new ProxyLogicAgent(navMeshProvider.Proxy.Root.transform, startWorld, "VC_LogicAgent_" + id);
+                _logicAgent.SetSpeed(DexterityToSpeed(crew.Dexterity));
+                _visualAgent = CrewVisualFactory.SpawnTestCrewVisual(context, _logicAgent.CurrentLocalPosition, _logicAgent.CurrentLocalRotation, id);
+                _poseSync = new ProxyToBoatPoseSync(_visualAgent, _logicAgent, context);
+                RefreshRestLocation();
+            }
+
+            internal Crewman Crew { get; }
+            internal object ActiveOwner { get; private set; }
+            internal CrewStation ActiveStation { get; private set; }
+            internal bool IsValid => _logicAgent != null && _logicAgent.IsValid && _visualAgent != null && _visualAgent.VisualRoot;
+            internal bool IsPositioningComplete => ActiveOwner != null && _logicAgent.HasArrived;
+            internal Vector3 CurrentLocalPosition => _logicAgent.CurrentLocalPosition;
+            internal Quaternion CurrentLocalRotation => _logicAgent.CurrentLocalRotation;
+
+            internal void Begin(object owner, CrewStation station, GPButtonRopeWinch winch)
+            {
+                ActiveOwner = owner;
+                ActiveStation = station;
+                _workingLogged = false;
+                _activeLabel = "station='" + station.Id + "'";
+                _activeArrivalRotation = station.LocalRotation;
+                _hasActiveArrivalRotation = true;
+                _lookoutActive = false;
+                _returningToRest = false;
+                _poseSync.ClearPoseOverride();
+                _poseSync.ClearRotationOverride();
+
+                var destinationWorld = _navMeshProvider.Proxy.Root.transform.TransformPoint(station.ProjectedLocalStand);
+                _initialDistance = Mathf.Max(0.01f, Vector3.Distance(_logicAgent.CurrentLocalPosition, station.ProjectedLocalStand));
+
+                CrewDebugLog.Ok(Phase,
+                    "Concrete positioning started crew='" + Crew.Name
+                    + "' station='" + station.Id
+                    + "' winch='" + winch.name + "'");
+                _logicAgent.SetDestination(destinationWorld, station.ProjectedLocalStand);
+            }
+
+            internal bool BeginRole(object owner, Vector3 destinationLocal, Quaternion arrivalRotation, string label)
+            {
+                if (!_navMeshProvider.TryGetWorldOnNavMesh(destinationLocal, 4f, out var destinationWorld))
+                {
+                    CrewDebugLog.Warn(Phase, "Could not project role destination crew='" + Crew.Name + "' " + label);
+                    return false;
+                }
+
+                Vector3 projectedLocal = _navMeshProvider.WorldToProxyLocal(destinationWorld);
+                ActiveOwner = owner;
+                ActiveStation = null;
+                _workingLogged = false;
+                _activeLabel = label;
+                _activeArrivalRotation = arrivalRotation;
+                _hasActiveArrivalRotation = true;
+                _lookoutActive = false;
+                _returningToRest = false;
+                _poseSync.ClearPoseOverride();
+                _poseSync.ClearRotationOverride();
+                _initialDistance = Mathf.Max(0.01f, Vector3.Distance(_logicAgent.CurrentLocalPosition, projectedLocal));
+                CrewDebugLog.Ok(Phase, "Role positioning started crew='" + Crew.Name + "' " + label);
+                _logicAgent.SetDestination(destinationWorld, projectedLocal);
+                return true;
+            }
+
+            internal bool BeginLookout(object owner, Vector3 startLocal, Quaternion startRotation, System.Random random)
+            {
+                _lookoutStartLocal = startLocal;
+                _lookoutStartRotation = startRotation;
+                _lookoutRandom = random;
+                if (!BeginRole(owner, startLocal, startRotation, "lookout start"))
+                    return false;
+
+                _lookoutActive = true;
+                _nextLookoutDecisionTime = 0f;
+                return true;
+            }
+
+            internal void Tick()
+            {
+                int dex = Crew.Dexterity;
+                if (dex != _lastAppliedDexterity)
+                {
+                    _logicAgent.SetSpeed(DexterityToSpeed(dex));
+                    _lastAppliedDexterity = dex;
+                }
+
+                _logicAgent.Tick();
+
+                if (ActiveOwner != null && _logicAgent.HasArrived && !_workingLogged)
+                {
+                    if (_hasActiveArrivalRotation)
+                        _poseSync.SetRotationOverride(_activeArrivalRotation);
+                    _workingLogged = true;
+                    CrewDebugLog.Ok(Phase,
+                        "Arrived crew='" + Crew.Name
+                        + "' " + _activeLabel);
+                }
+
+                if (_lookoutActive && ActiveOwner != null)
+                    TickLookout();
+
+                if (ActiveOwner == null && !Crew.IsOccupied && _hasRestLocation)
+                {
+                    if (_returningToRest && _logicAgent.HasArrived)
+                    {
+                        _returningToRest = false;
+                        _logicAgent.Stop();
+                        _poseSync.SetPoseOverride(_logicAgent.CurrentLocalPosition, _restLocalRotation);
+                    }
+                    else if (!_returningToRest && LocalHorizontalDistance(_logicAgent.CurrentLocalPosition, _restStandLocalPosition) > 0.35f)
+                    {
+                        MoveToRest();
+                    }
+                }
+
+                _poseSync.Tick();
+            }
+
+            internal float GetPositioningProgress()
+            {
+                if (ActiveOwner == null)
+                    return 0f;
+
+                float distance = _logicAgent.HasDestination
+                    ? Vector3.Distance(_logicAgent.CurrentLocalPosition, _logicAgent.LastDestinationLocal)
+                    : 0f;
+                return Mathf.Clamp01(distance / _initialDistance) * 100f;
+            }
+
+            internal void Complete()
+            {
+                ActiveOwner = null;
+                ActiveStation = null;
+                _initialDistance = 0f;
+                _workingLogged = false;
+                _activeLabel = null;
+                _hasActiveArrivalRotation = false;
+                _lookoutActive = false;
+            }
+
+            internal void Cancel()
+            {
+                _logicAgent.Stop();
+                _poseSync.ClearPoseOverride();
+                _poseSync.ClearRotationOverride();
+                CrewDebugLog.Ok(Phase, "Concrete positioning cancelled crew='" + Crew.Name + "'");
+                Complete();
+            }
+
+            private void TickLookout()
+            {
+                if (Time.time < _nextLookoutDecisionTime)
+                    return;
+
+                _nextLookoutDecisionTime = Time.time + 4f;
+
+                if (TryGetVisibleLand(out var islandPosition))
+                {
+                    Quaternion facing = GetLocalLookRotationTowardWorld(islandPosition);
+                    _activeArrivalRotation = facing;
+                    _hasActiveArrivalRotation = true;
+
+                    if (LocalHorizontalDistance(_logicAgent.CurrentLocalPosition, _lookoutStartLocal) > 0.5f
+                        && (!_logicAgent.HasActiveDestination || LocalHorizontalDistance(_logicAgent.LastDestinationLocal, _lookoutStartLocal) > 0.35f))
+                    {
+                        _workingLogged = false;
+                        if (BeginRole(ActiveOwner, _lookoutStartLocal, facing, "lookout visible land"))
+                            _lookoutActive = true;
+                    }
+                    else if (!_logicAgent.HasActiveDestination)
+                    {
+                        _poseSync.SetRotationOverride(facing);
+                    }
+
+                    return;
+                }
+
+                if (_logicAgent.HasActiveDestination)
+                    return;
+
+                if (TryGetRandomDeckLocal(out var randomLocal))
+                {
+                    _workingLogged = false;
+                    if (BeginRole(ActiveOwner, randomLocal, _logicAgent.CurrentLocalRotation, "lookout patrol"))
+                        _lookoutActive = true;
+                }
+            }
+
+            private bool TryGetVisibleLand(out Vector3 islandPosition)
+            {
+                islandPosition = Vector3.zero;
+                var tracker = IslandDistanceTracker.instance;
+                if (tracker == null || tracker.islands == null || tracker.islands.Count == 0)
+                    return false;
+
+                Vector3 from = _context.WorldBoat.TransformPoint(_lookoutStartLocal);
+                foreach (var item in tracker.islands
+                    .Where(i => i != null)
+                    .Select(i => new { Island = i, Distance = Vector3.Distance(i.GetPosition(), from) })
+                    .OrderBy(x => x.Distance)
+                    .Take(8))
+                {
+                    if (IsLandVisible(item.Island, item.Distance))
+                    {
+                        islandPosition = item.Island.GetPosition();
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            private bool IsLandVisible(IslandHorizon island, float distance)
+            {
+                if (island == null || distance <= 0f)
+                    return false;
+
+                float peak = GetPeakAboveRoot(island);
+                if (peak <= 0f)
+                    return false;
+
+                float currentDrop = GetInitialHeight(island) - island.transform.localPosition.y;
+                float visibleHeight = peak - currentDrop;
+                float angleDeg = Mathf.Atan2(visibleHeight, distance) * Mathf.Rad2Deg;
+                float threshold = 1f - Crew.Wisdom * 0.1f;
+                return angleDeg >= threshold;
+            }
+
+            private float GetPeakAboveRoot(IslandHorizon island)
+            {
+                float maxY = ScanMaxWorldY(island);
+                return maxY == float.MinValue ? 0f : maxY - island.transform.position.y;
+            }
+
+            private float ScanMaxWorldY(IslandHorizon island)
+            {
+                float maxY = float.MinValue;
+
+                foreach (var renderer in island.GetComponentsInChildren<Renderer>())
+                {
+                    if (renderer.bounds.min.y < 250f && renderer.bounds.max.y > maxY)
+                        maxY = renderer.bounds.max.y;
+                }
+
+                if (island.islandIndex > 0 && island.SceneLoaded())
+                {
+                    var scene = SceneManager.GetSceneByBuildIndex(island.islandIndex);
+                    if (scene.isLoaded)
+                    {
+                        foreach (var root in scene.GetRootGameObjects())
+                        {
+                            foreach (var renderer in root.GetComponentsInChildren<Renderer>())
+                            {
+                                if (renderer.bounds.min.y < 250f && renderer.bounds.max.y > maxY)
+                                    maxY = renderer.bounds.max.y;
+                            }
+                        }
+                    }
+                }
+
+                return maxY;
+            }
+
+            private static float GetInitialHeight(IslandHorizon island)
+            {
+                try { return Traverse.Create(island).Field("initialHeight").GetValue<float>(); }
+                catch { return 0f; }
+            }
+
+            private Quaternion GetLocalLookRotationTowardWorld(Vector3 worldPosition)
+            {
+                Vector3 localTarget = _context.WorldBoat.InverseTransformPoint(worldPosition);
+                Vector3 direction = localTarget - _logicAgent.CurrentLocalPosition;
+                direction.y = 0f;
+                if (direction.sqrMagnitude < 0.001f)
+                    direction = Vector3.left;
+
+                return Quaternion.LookRotation(direction.normalized, Vector3.up);
+            }
+
+            private bool TryGetRandomDeckLocal(out Vector3 localPosition)
+            {
+                localPosition = _lookoutStartLocal;
+                Bounds bounds = _navMeshProvider.Proxy.Bounds;
+                Transform proxyRoot = _navMeshProvider.Proxy.Root.transform;
+
+                for (int i = 0; i < 12; i++)
+                {
+                    float x = Mathf.Lerp(bounds.min.x, bounds.max.x, (float)_lookoutRandom.NextDouble());
+                    float z = Mathf.Lerp(bounds.min.z, bounds.max.z, (float)_lookoutRandom.NextDouble());
+                    Vector3 world = new Vector3(x, bounds.center.y, z);
+                    Vector3 candidateLocal = proxyRoot.InverseTransformPoint(world);
+
+                    if (_navMeshProvider.TryGetWorldOnNavMeshQuiet(candidateLocal, 20f, out var hitWorld))
+                    {
+                        localPosition = _navMeshProvider.WorldToProxyLocal(hitWorld);
+                        if (LocalHorizontalDistance(localPosition, _logicAgent.CurrentLocalPosition) > 2f)
+                            return true;
+                    }
+                }
+
+                return false;
+            }
+
+            internal void RefreshRestLocation()
+            {
+                _hasRestLocation = VirtualCrewManager.Instance.TryGetCrewRestLocation(Crew, out _restLocalPosition, out _restLocalRotation);
+                if (!_hasRestLocation)
+                    return;
+
+                _restStandLocalPosition = GetRestStandLocalPosition();
+
+                if (ActiveOwner == null && !Crew.IsOccupied)
+                {
+                    if (LocalHorizontalDistance(_logicAgent.CurrentLocalPosition, _restStandLocalPosition) <= 0.35f)
+                    {
+                        _logicAgent.Stop();
+                        _poseSync.SetPoseOverride(_logicAgent.CurrentLocalPosition, _restLocalRotation);
+                    }
+                    else
+                        MoveToRest();
+                }
+            }
+
+            internal void Destroy()
+            {
+                _logicAgent.Destroy();
+                _visualAgent.Destroy();
+            }
+
+            private void MoveToRest()
+            {
+                if (!_hasRestLocation || !_navMeshProvider.TryGetWorldOnNavMesh(_restLocalPosition, 4f, out var restWorld))
+                    return;
+
+                _restStandLocalPosition = _navMeshProvider.WorldToProxyLocal(restWorld);
+                _returningToRest = true;
+                _poseSync.ClearPoseOverride();
+                _poseSync.ClearRotationOverride();
+                _logicAgent.SetDestination(restWorld, _restStandLocalPosition);
+                CrewDebugLog.Ok(Phase, "Returning crew='" + Crew.Name + "' to rest location.");
+            }
+
+            private Vector3 GetRestStandLocalPosition()
+            {
+                if (_navMeshProvider.TryGetWorldOnNavMeshQuiet(_restLocalPosition, 4f, out var restWorld))
+                    return _navMeshProvider.WorldToProxyLocal(restWorld);
+
+                return _restLocalPosition;
+            }
+
+            private static float LocalHorizontalDistance(Vector3 a, Vector3 b)
+            {
+                a.y = 0f;
+                b.y = 0f;
+                return Vector3.Distance(a, b);
+            }
+        }
+    }
+}

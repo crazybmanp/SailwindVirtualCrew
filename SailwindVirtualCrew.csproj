@@ -67,6 +67,9 @@
     <Reference Include="UnityEngine.IMGUIModule">
       <HintPath>D:\Program Files (x86)\Steam\steamapps\common\Sailwind\Sailwind_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.AIModule">
+      <HintPath>D:\Program Files (x86)\Steam\steamapps\common\Sailwind\Sailwind_Data\Managed\UnityEngine.AIModule.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.PhysicsModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\Program Files (x86)\Steam\steamapps\common\Sailwind\Sailwind_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
@@ -81,7 +84,25 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CrewApiProbe.cs" />
+    <Compile Include="CrewAgent.cs" />
+    <Compile Include="CrewBoatContext.cs" />
+    <Compile Include="CrewBoatContextResolver.cs" />
+    <Compile Include="CrewDebugLog.cs" />
+    <Compile Include="CrewDebugLocalMarker.cs" />
+    <Compile Include="CrewDebugObjects.cs" />
+    <Compile Include="CrewNavigationCoordinator.cs" />
+    <Compile Include="CrewSpaceMapper.cs" />
+    <Compile Include="CrewStation.cs" />
+    <Compile Include="CrewStationScanner.cs" />
+    <Compile Include="CrewStationTask.cs" />
+    <Compile Include="CrewVisualFactory.cs" />
     <Compile Include="ModIntegrations.cs" />
+    <Compile Include="ProxyBoat.cs" />
+    <Compile Include="ProxyBoatBuilder.cs" />
+    <Compile Include="ProxyLogicAgent.cs" />
+    <Compile Include="ProxyNavMeshNavigationProvider.cs" />
+    <Compile Include="ProxyToBoatPoseSync.cs" />
     <Compile Include="Requests\BailRequest.cs" />
     <Compile Include="Requests\LookoutTask.cs" />
     <Compile Include="Requests\PilotTask.cs" />
@@ -91,6 +112,7 @@
     <Compile Include="LocatorUtils.cs" />
     <Compile Include="SailwindGuiStyle.cs" />
     <Compile Include="WeatherUtils.cs" />
+    <Compile Include="Windows\VirtualCrewDebugWindow.cs" />
     <Compile Include="Windows\CrewRosterWindow.cs" />
     <Compile Include="Windows\LookoutWindow.cs" />
     <Compile Include="Crewman.cs" />

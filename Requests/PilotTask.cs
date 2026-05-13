@@ -8,10 +8,12 @@ namespace SailwindVirtualCrew
         {
             AssignedCrewman     = crewman;
             crewman.CurrentTask = this;
+            CrewNavigationCoordinator.Instance.BeginPilot(this);
         }
 
         public void Cancel()
         {
+            CrewNavigationCoordinator.Instance.Cancel(this);
             AssignedCrewman.CurrentTask = null;
         }
     }

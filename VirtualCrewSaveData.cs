@@ -6,6 +6,7 @@ namespace SailwindVirtualCrew
     [Serializable]
     public class CrewmanSaveData
     {
+        public string id;
         public string   name;
         public ShipRole role;
         public int strength, dexterity, constitution, intelligence, wisdom, charisma;
@@ -22,11 +23,19 @@ namespace SailwindVirtualCrew
     }
 
     [Serializable]
+    public class CrewRestLocationSaveData
+    {
+        public float[] localPosition;
+        public float[] localEulerAngles;
+    }
+
+    [Serializable]
     public class VesselSaveData
     {
         public string friendlyName;
         public Dictionary<string, string> sailFriendlyNames = new Dictionary<string, string>();
         public List<SailGroupSaveData> sailGroups = new List<SailGroupSaveData>();
+        public Dictionary<string, CrewRestLocationSaveData> crewRestLocations = new Dictionary<string, CrewRestLocationSaveData>();
     }
 
     [Serializable]

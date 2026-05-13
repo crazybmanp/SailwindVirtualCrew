@@ -44,12 +44,12 @@ namespace SailwindVirtualCrew
         private ConfigEntry<KeyboardShortcut> ScanItems;
 
         public static Plugin Instance { get; private set; }
+        private Harmony _harmony;
 
         private void Awake()
         {
             Instance = this;
-            var harmony = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), PLUGIN_ID);
-            ModIntegrations.Initialize(harmony);
+            _harmony = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), PLUGIN_ID);
 
             exampleSetting = Config.Bind("Section", "Key", true, new ConfigDescription("Information about the config setting"));
 
@@ -79,6 +79,7 @@ namespace SailwindVirtualCrew
             ScanItems = Config.Bind("CrewHotkeys", "ScanItems", new KeyboardShortcut(KeyCode.P));
 
             gameObject.AddComponent<DeveloperWindow>();
+            gameObject.AddComponent<VirtualCrewDebugWindow>();
             gameObject.AddComponent<CrewWindow>();
             gameObject.AddComponent<SailGroupsWindow>();
             gameObject.AddComponent<SailGroupMembersWindow>();
@@ -88,6 +89,12 @@ namespace SailwindVirtualCrew
             gameObject.AddComponent<PilotingWindow>();
             gameObject.AddComponent<CrewRosterWindow>();
             gameObject.AddComponent<LookoutWindow>();
+        }
+
+        private void Start()
+        {
+            ModIntegrations.Initialize(_harmony);
+            CrewApiProbe.Run();
         }
 
         private void Update()
@@ -100,6 +107,8 @@ namespace SailwindVirtualCrew
             }
 
             VirtualCrewManager.Instance.TrimTick();
+            CrewDebugObjects.Tick();
+            CrewNavigationCoordinator.Instance.Tick();
 
             if (BuildShipMap.Value.IsDown())
             {

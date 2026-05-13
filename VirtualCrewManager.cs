@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using UnityEngine;
 
 namespace SailwindVirtualCrew
 {
@@ -24,7 +25,7 @@ namespace SailwindVirtualCrew
         public List<SleepRequest>    SleepRequests    { get; private set; }
         public Dictionary<GPButtonRopeWinch, WinchTarget> crewWinchInstructions;
 
-        private readonly Random rng = new Random();
+        private readonly System.Random rng = new System.Random();
 
         public Dictionary<string, VesselSaveData> AllVesselsData { get; set; }
         public string CurrentVesselKey { get; private set; }
@@ -135,6 +136,60 @@ namespace SailwindVirtualCrew
             if (!AllVesselsData.ContainsKey(CurrentVesselKey))
                 AllVesselsData[CurrentVesselKey] = new VesselSaveData();
             AllVesselsData[CurrentVesselKey].friendlyName = string.IsNullOrEmpty(name) ? null : name;
+        }
+
+        public void SetCrewRestLocation(Crewman crewman, Vector3 localPosition, Quaternion localRotation)
+        {
+            if (crewman == null) return;
+            EnsureCurrentVesselKey();
+            if (CurrentVesselKey == null) return;
+            if (!AllVesselsData.ContainsKey(CurrentVesselKey))
+                AllVesselsData[CurrentVesselKey] = new VesselSaveData();
+
+            var dict = AllVesselsData[CurrentVesselKey].crewRestLocations
+                ?? (AllVesselsData[CurrentVesselKey].crewRestLocations = new Dictionary<string, CrewRestLocationSaveData>());
+            dict[crewman.Id] = new CrewRestLocationSaveData
+            {
+                localPosition = new[] { localPosition.x, localPosition.y, localPosition.z },
+                localEulerAngles = new[] { localRotation.eulerAngles.x, localRotation.eulerAngles.y, localRotation.eulerAngles.z }
+            };
+        }
+
+        public bool TryGetCrewRestLocation(Crewman crewman, out Vector3 localPosition, out Quaternion localRotation)
+        {
+            localPosition = Vector3.zero;
+            localRotation = Quaternion.identity;
+            EnsureCurrentVesselKey();
+            if (crewman == null || CurrentVesselKey == null)
+                return false;
+
+            if (!AllVesselsData.TryGetValue(CurrentVesselKey, out var vesselData)
+                || vesselData.crewRestLocations == null
+                || !vesselData.crewRestLocations.TryGetValue(crewman.Id, out var saved)
+                || saved.localPosition == null
+                || saved.localPosition.Length < 3)
+                return false;
+
+            localPosition = new Vector3(saved.localPosition[0], saved.localPosition[1], saved.localPosition[2]);
+            if (saved.localEulerAngles != null && saved.localEulerAngles.Length >= 3)
+                localRotation = Quaternion.Euler(saved.localEulerAngles[0], saved.localEulerAngles[1], saved.localEulerAngles[2]);
+            return true;
+        }
+
+        public void ClearCrewRestLocation(Crewman crewman)
+        {
+            if (crewman == null || CurrentVesselKey == null) return;
+            if (AllVesselsData.TryGetValue(CurrentVesselKey, out var vesselData) && vesselData.crewRestLocations != null)
+                vesselData.crewRestLocations.Remove(crewman.Id);
+        }
+
+        private void EnsureCurrentVesselKey()
+        {
+            if (CurrentVesselKey != null || GameState.currentBoat == null)
+                return;
+
+            string vesselKey = GameState.currentBoat.name.Replace("(Clone)", "").Trim();
+            SetCurrentVessel(vesselKey);
         }
 
         public void Reset()
@@ -339,7 +394,8 @@ namespace SailwindVirtualCrew
             new Crewman(d.name, d.role,
                 d.strength, d.dexterity, d.constitution, d.intelligence, d.wisdom, d.charisma,
                 d.advStrength, d.advDexterity, d.advConstitution, d.advIntelligence, d.advWisdom, d.advCharisma,
-                d.currentStamina);
+                d.currentStamina,
+                d.id);
 
         public void addSail(SimpleSail sail)
         {
@@ -414,6 +470,7 @@ namespace SailwindVirtualCrew
 
         public void CancelWorkRequest(WorkRequest request)
         {
+            request.CancelPositioning();
             if (request.AssignedCrewman != null)
                 request.AssignedCrewman.CurrentTask = null;
             foreach (var t in request.Targets)
@@ -433,6 +490,7 @@ namespace SailwindVirtualCrew
             if (request.AssignedCrewman != null)
                 request.AssignedCrewman.CurrentTask = null;
             crewWinchInstructions.Remove(request.Sail.getSheetWinch());
+            CrewNavigationCoordinator.Instance.Cancel(request);
             TrimRequests.Remove(request);
         }
 
@@ -451,6 +509,9 @@ namespace SailwindVirtualCrew
                 request.AssignedCrewman.CurrentTask = null;
             crewWinchInstructions.Remove(request.Sail.getPortSheetWinch());
             crewWinchInstructions.Remove(request.Sail.getStarboardSheetWinch());
+            var nav = CrewNavigationCoordinator.Instance;
+            nav.Cancel(request);
+            nav.Cancel((request, 1));
             JibTrimRequests.Remove(request);
         }
 
@@ -493,6 +554,9 @@ namespace SailwindVirtualCrew
             if (request.AssignedCrewman2 != null) request.AssignedCrewman2.CurrentTask = null;
             crewWinchInstructions.Remove(request.Sail.getPortSheetWinch());
             crewWinchInstructions.Remove(request.Sail.getStarboardSheetWinch());
+            var nav = CrewNavigationCoordinator.Instance;
+            nav.Cancel((request, 0));
+            nav.Cancel((request, 1));
             SquareTrimRequests.Remove(request);
         }
 
@@ -555,6 +619,8 @@ namespace SailwindVirtualCrew
 
             WorkRequests.RemoveAll(r => r.Status == WorkRequestStatus.Complete);
 
+            var navCoord = CrewNavigationCoordinator.Instance;
+
             foreach (var trim in TrimRequests)
             {
                 if (trim.Status == WorkRequestStatus.InProgress && trim.IsComplete())
@@ -564,24 +630,17 @@ namespace SailwindVirtualCrew
                         trim.AssignedCrewman.CurrentTask = null;
                     crewWinchInstructions.Remove(trim.Sail.getSheetWinch());
                 }
-                else if (trim.Status == WorkRequestStatus.Positioning && trim.IsPositioningComplete())
+                else if (trim.Status == WorkRequestStatus.Positioning &&
+                         (navCoord.IsPositioningComplete(trim) || trim.IsPositioningComplete()))
                 {
+                    navCoord.Complete(trim);
                     trim.Begin(trim.AssignedCrewman);
                 }
             }
 
             TrimRequests.RemoveAll(r => r.Status == WorkRequestStatus.Complete);
 
-            // Assign open requests to unoccupied deckhands.
-            foreach (var req in WorkRequests)
-            {
-                if (req.Status != WorkRequestStatus.Open) continue;
-                var crewman = Crew.FirstOrDefault(c => !c.IsOccupied && c.Role == ShipRole.Deckhand);
-                if (crewman == null) break;
-                crewman.CurrentTask = req;
-                req.AssignedCrewman = crewman;
-                req.BeginPositioning(crewman);
-            }
+            AssignOpenWorkRequestsByDeckhand();
 
             foreach (var trim in TrimRequests)
             {
@@ -591,6 +650,7 @@ namespace SailwindVirtualCrew
                 crewman.CurrentTask = trim;
                 trim.AssignedCrewman = crewman;
                 trim.BeginPositioning(crewman);
+                navCoord.TryBeginWinchPositioning(trim, crewman, trim.Sail.getSheetWinch());
             }
 
             foreach (var jtrim in JibTrimRequests)
@@ -603,8 +663,19 @@ namespace SailwindVirtualCrew
                     crewWinchInstructions.Remove(jtrim.Sail.getPortSheetWinch());
                     crewWinchInstructions.Remove(jtrim.Sail.getStarboardSheetWinch());
                 }
-                else if (jtrim.Status == WorkRequestStatus.Positioning && jtrim.IsPositioningComplete())
+                else if (jtrim.Status == WorkRequestStatus.InProgress && jtrim.IsRepositioning && jtrim.SecondWinch != null)
                 {
+                    navCoord.TryBeginWinchPositioning((jtrim, 1), jtrim.AssignedCrewman, jtrim.SecondWinch);
+                    if (navCoord.IsPositioningComplete((jtrim, 1)))
+                    {
+                        navCoord.Complete((jtrim, 1));
+                        jtrim.BeginSecondWinch();
+                    }
+                }
+                else if (jtrim.Status == WorkRequestStatus.Positioning &&
+                         (navCoord.IsPositioningComplete(jtrim) || jtrim.IsPositioningComplete()))
+                {
+                    navCoord.Complete(jtrim);
                     jtrim.Begin(jtrim.AssignedCrewman);
                 }
             }
@@ -619,6 +690,7 @@ namespace SailwindVirtualCrew
                 crewman.CurrentTask = jtrim;
                 jtrim.AssignedCrewman = crewman;
                 jtrim.BeginPositioning(crewman);
+                navCoord.TryBeginWinchPositioning(jtrim, crewman, jtrim.Sail.getPortSheetWinch());
             }
 
             foreach (var strim in SquareTrimRequests)
@@ -631,9 +703,16 @@ namespace SailwindVirtualCrew
                     crewWinchInstructions.Remove(strim.Sail.getPortSheetWinch());
                     crewWinchInstructions.Remove(strim.Sail.getStarboardSheetWinch());
                 }
-                else if (strim.Status == WorkRequestStatus.Positioning && strim.IsPositioningComplete())
+                else if (strim.Status == WorkRequestStatus.Positioning)
                 {
-                    strim.Begin();
+                    bool c1 = navCoord.IsPositioningComplete((strim, 0)) || strim.IsPositioningComplete();
+                    bool c2 = navCoord.IsPositioningComplete((strim, 1)) || strim.IsPositioningComplete();
+                    if (c1 && c2)
+                    {
+                        navCoord.Complete((strim, 0));
+                        navCoord.Complete((strim, 1));
+                        strim.Begin();
+                    }
                 }
             }
 
@@ -650,6 +729,8 @@ namespace SailwindVirtualCrew
                 strim.AssignedCrewman  = free[0];
                 strim.AssignedCrewman2 = free[1];
                 strim.BeginPositioning();
+                navCoord.TryBeginWinchPositioning((strim, 0), free[0], strim.Sail.getPortSheetWinch());
+                navCoord.TryBeginWinchPositioning((strim, 1), free[1], strim.Sail.getStarboardSheetWinch());
             }
 
             // Navigate requests: assign navigator when free, complete when timer expires.
@@ -740,6 +821,81 @@ namespace SailwindVirtualCrew
         {
             if (crewman.IsOccupied) return;
             SleepRequests.Add(new SleepRequest(crewman));
+        }
+
+        private void AssignOpenWorkRequestsByDeckhand()
+        {
+            var openRequests = WorkRequests
+                .Where(r => r.Status == WorkRequestStatus.Open)
+                .ToList();
+            if (openRequests.Count == 0)
+                return;
+
+            foreach (var crewman in Crew.Where(c => !c.IsOccupied && c.Role == ShipRole.Deckhand).ToList())
+            {
+                if (openRequests.Count == 0)
+                    break;
+
+                var request = FindClosestOpenWorkRequest(crewman, openRequests);
+                if (request == null)
+                    continue;
+
+                crewman.CurrentTask = request;
+                request.AssignedCrewman = crewman;
+                request.BeginPositioning(crewman);
+                openRequests.Remove(request);
+            }
+        }
+
+        private WorkRequest FindClosestOpenWorkRequest(Crewman crewman, List<WorkRequest> openRequests)
+        {
+            if (crewman == null || openRequests == null || openRequests.Count == 0)
+                return null;
+
+            var ranked = openRequests
+                .Select(r => new
+                {
+                    Request = r,
+                    Distance = EstimateDistanceToWorkRequest(crewman, r)
+                })
+                .OrderBy(x => x.Distance)
+                .ToList();
+
+            CrewDebugLog.Ok("RuntimeNav",
+                "Task distance ranking for crew='" + crewman.Name + "': "
+                + string.Join(", ", ranked.Select(x => GetWorkRequestLabel(x.Request) + "=" + FormatDistance(x.Distance)).ToArray()));
+
+            return ranked.FirstOrDefault()?.Request;
+        }
+
+        private static float EstimateDistanceToWorkRequest(Crewman crewman, WorkRequest request)
+        {
+            var winch = GetPrimaryWinch(request);
+            return winch
+                ? CrewNavigationCoordinator.Instance.EstimateDistanceToWinch(crewman, winch)
+                : float.MaxValue;
+        }
+
+        private static GPButtonRopeWinch GetPrimaryWinch(WorkRequest request)
+        {
+            return request?.Targets?.FirstOrDefault()?.Winch;
+        }
+
+        private static string GetWorkRequestLabel(WorkRequest request)
+        {
+            if (request == null)
+                return "null";
+
+            var winch = GetPrimaryWinch(request);
+            string winchName = winch ? winch.name : "no-winch";
+            return request.DisplayLabel + "@" + winchName;
+        }
+
+        private static string FormatDistance(float distance)
+        {
+            return float.IsInfinity(distance) || distance == float.MaxValue
+                ? "unreachable"
+                : distance.ToString("0.0") + "m";
         }
 
         public void CancelSleepRequest(SleepRequest request)
