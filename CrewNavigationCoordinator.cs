@@ -134,8 +134,12 @@ namespace SailwindVirtualCrew
             Vector3 bedLocal = _context.WorldBoat.InverseTransformPoint(bedWorld);
             Quaternion bedRotation = Quaternion.Inverse(_context.WorldBoat.rotation) * bed.transform.rotation;
 
-            if (actor.BeginRole(request, bedLocal, bedRotation, "sleep bed='" + bed.name + "'", 1.5f, Vector3.up * 0.33f))
-                _actorsByOwner[request] = actor;
+            if (!actor.BeginRole(request, bedLocal, bedRotation, "sleep bed='" + bed.name + "'", 1.5f, Vector3.up * 0.33f))
+            {
+                CrewDebugLog.Warn(Phase, "Bed off NavMesh, teleporting crew='" + crewman.Name + "' to bed='" + bed.name + "'");
+                actor.TeleportToRole(request, bedLocal, bedRotation, Vector3.up * 0.33f);
+            }
+            _actorsByOwner[request] = actor;
         }
 
         private static Vector3 GetBedSleepPosition(Component bed)
@@ -354,6 +358,7 @@ namespace SailwindVirtualCrew
             private readonly ProxyToBoatPoseSync _poseSync;
             private float _initialDistance;
             private bool _workingLogged;
+            private bool _isTeleported;
             private string _activeLabel;
             private Quaternion _activeArrivalRotation;
             private bool _hasActiveArrivalRotation;
@@ -379,7 +384,7 @@ namespace SailwindVirtualCrew
                 string id = SafeName(crew.Name);
                 _logicAgent = new ProxyLogicAgent(navMeshProvider.Proxy.Root.transform, startWorld, "VC_LogicAgent_" + id);
                 _logicAgent.SetSpeed(DexterityToSpeed(crew.Dexterity));
-                _visualAgent = CrewVisualFactory.SpawnTestCrewVisual(context, _logicAgent.CurrentLocalPosition, _logicAgent.CurrentLocalRotation, id);
+                _visualAgent = CrewVisualFactory.SpawnTestCrewVisual(context, _logicAgent.CurrentLocalPosition, _logicAgent.CurrentLocalRotation, id, crew.ModelIndex);
                 _poseSync = new ProxyToBoatPoseSync(_visualAgent, _logicAgent, context);
                 RefreshRestLocation();
             }
@@ -388,7 +393,7 @@ namespace SailwindVirtualCrew
             internal object ActiveOwner { get; private set; }
             internal CrewStation ActiveStation { get; private set; }
             internal bool IsValid => _logicAgent != null && _logicAgent.IsValid && _visualAgent != null && _visualAgent.VisualRoot;
-            internal bool IsPositioningComplete => ActiveOwner != null && _logicAgent.HasArrived;
+            internal bool IsPositioningComplete => _isTeleported || (ActiveOwner != null && _logicAgent.HasArrived);
             internal Vector3 CurrentLocalPosition => _logicAgent.CurrentLocalPosition;
             internal Quaternion CurrentLocalRotation => _logicAgent.CurrentLocalRotation;
 
@@ -439,6 +444,25 @@ namespace SailwindVirtualCrew
                 CrewDebugLog.Ok(Phase, "Role positioning started crew='" + Crew.Name + "' " + label);
                 _logicAgent.SetDestination(destinationWorld, projectedLocal);
                 return true;
+            }
+
+            internal void TeleportToRole(object owner, Vector3 destinationLocal, Quaternion arrivalRotation, Vector3 arrivalWorldOffset)
+            {
+                ActiveOwner = owner;
+                ActiveStation = null;
+                _isTeleported = true;
+                _workingLogged = true;
+                _activeLabel = "teleport";
+                _hasActiveArrivalRotation = true;
+                _activeArrivalRotation = arrivalRotation;
+                _arrivalWorldOffset = arrivalWorldOffset;
+                _lookoutActive = false;
+                _returningToRest = false;
+                _poseSync.ClearPoseOverride();
+                _poseSync.ClearRotationOverride();
+                Vector3 localOffset = _context.WorldBoat.InverseTransformDirection(arrivalWorldOffset);
+                _poseSync.SetPoseOverride(destinationLocal + localOffset, arrivalRotation);
+                CrewDebugLog.Ok(Phase, "Teleported to role crew='" + Crew.Name + "' dest=" + destinationLocal);
             }
 
             internal bool BeginLookout(object owner, Vector3 startLocal, Quaternion startRotation, System.Random random)
@@ -522,6 +546,7 @@ namespace SailwindVirtualCrew
                 ActiveStation = null;
                 _initialDistance = 0f;
                 _workingLogged = false;
+                _isTeleported = false;
                 _activeLabel = null;
                 _hasActiveArrivalRotation = false;
                 _arrivalWorldOffset = Vector3.zero;
