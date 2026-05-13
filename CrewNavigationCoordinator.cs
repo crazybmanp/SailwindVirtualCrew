@@ -638,7 +638,14 @@ namespace SailwindVirtualCrew
                 float visibleHeight = peak - currentDrop;
                 float angleDeg = Mathf.Atan2(visibleHeight, distance) * Mathf.Rad2Deg;
                 float threshold = 1f - Crew.Wisdom * 0.1f;
+                if (IsNightwatch()) threshold *= 5f;
                 return angleDeg >= threshold;
+            }
+
+            private static bool IsNightwatch()
+            {
+                float t = Sun.sun.localTime;
+                return t >= 20f || t < 4f;
             }
 
             private float GetPeakAboveRoot(IslandHorizon island)
