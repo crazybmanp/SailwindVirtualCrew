@@ -24,6 +24,7 @@ namespace SailwindVirtualCrew
                     .Where(g => !g.IsAllSails)
                     .Select(g => new SailGroupSaveData
                     {
+                        id = g.Id,
                         name = g.Name,
                         memberIdentifiers = g.MemberIdentifiers.ToList()
                     })

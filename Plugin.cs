@@ -16,7 +16,7 @@ namespace SailwindVirtualCrew
     {
         public const string PLUGIN_ID = "com.zorkinian.virtualcrew";
         public const string PLUGIN_NAME = "VirtualCrew";
-        public const string PLUGIN_VERSION = "0.1.3";
+        public const string PLUGIN_VERSION = "0.1.4";
 
         //--settings--
         internal static ConfigEntry<bool> exampleSetting;
@@ -31,16 +31,6 @@ namespace SailwindVirtualCrew
         private const float tickInterval = 1f;
 
         private ConfigEntry<KeyboardShortcut> BuildShipMap;
-        private ConfigEntry<KeyboardShortcut> DeployAllSail;
-        private ConfigEntry<KeyboardShortcut> ReefAllSail;
-        private ConfigEntry<KeyboardShortcut> EaseAllSail;
-        private ConfigEntry<KeyboardShortcut> TrimAllSail;
-        private ConfigEntry<KeyboardShortcut> BringToPort;
-        private ConfigEntry<KeyboardShortcut> BringToStarboard;
-        private ConfigEntry<KeyboardShortcut> DeploySquares;
-        private ConfigEntry<KeyboardShortcut> ReefSquares;
-        private ConfigEntry<KeyboardShortcut> DeployOthers;
-        private ConfigEntry<KeyboardShortcut> ReefOthers;
         private ConfigEntry<KeyboardShortcut> ScanItems;
 
         public static Plugin Instance { get; private set; }
@@ -60,22 +50,6 @@ namespace SailwindVirtualCrew
             ToggleCrewWindow = Config.Bind("CrewHotkeys", "ToggleCrewWindow", new KeyboardShortcut(KeyCode.B));
             BuildShipMap = Config.Bind("CrewHotkeys", "BuildShipMap", new KeyboardShortcut(KeyCode.V));
 
-            // Sailing actions
-            DeployAllSail = Config.Bind("CrewHotkeys", "RaiseAllSail", new KeyboardShortcut(KeyCode.H));
-            ReefAllSail = Config.Bind("CrewHotkeys", "ReefAllSail", new KeyboardShortcut(KeyCode.N));
-
-            EaseAllSail = Config.Bind("CrewHotkeys", "EaseeAllSail", new KeyboardShortcut(KeyCode.J));
-            TrimAllSail = Config.Bind("CrewHotkeys", "TrimAllSail", new KeyboardShortcut(KeyCode.M));
-
-            BringToPort = Config.Bind("CrewHotkeys", "BringToPort", new KeyboardShortcut(KeyCode.K));
-            BringToStarboard = Config.Bind("CrewHotkeys", "BringToStarboard", new KeyboardShortcut(KeyCode.L));
-
-            DeploySquares = Config.Bind("CrewHotkeys", "DeploySquares", new KeyboardShortcut(KeyCode.Y));
-            ReefSquares = Config.Bind("CrewHotkeys", "ReefSquares", new KeyboardShortcut(KeyCode.U));
-
-            DeployOthers = Config.Bind("CrewHotkeys", "DeployOthers", new KeyboardShortcut(KeyCode.I));
-            ReefOthers = Config.Bind("CrewHotkeys", "ReefOthers", new KeyboardShortcut(KeyCode.O));
-
             ScanItems = Config.Bind("CrewHotkeys", "ScanItems", new KeyboardShortcut(KeyCode.P));
 
             gameObject.AddComponent<CrewSoundPlayer>();
@@ -91,6 +65,7 @@ namespace SailwindVirtualCrew
             gameObject.AddComponent<CrewRosterWindow>();
             gameObject.AddComponent<LookoutWindow>();
             gameObject.AddComponent<WorkstationCustomizerWindow>();
+            gameObject.AddComponent<FavoriteActionsWindow>();
         }
 
         private void Start()
@@ -304,90 +279,9 @@ namespace SailwindVirtualCrew
                 CrewNavigationCoordinator.Instance.RebuildWorkstations();
             }
 
-            if (DeployAllSail.Value.IsDown())
-            {
-                Console.WriteLine("Deploying all sail");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.deployAllSails();
-            }
-
-            if (ReefAllSail.Value.IsDown())
-            {
-                Console.WriteLine("Reef all sail");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.reefAllSails();
-            }
-
-            if (EaseAllSail.Value.IsDown())
-            {
-                Console.WriteLine("Ease all sail");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.easeAllSails();
-            }
-
-            if (TrimAllSail.Value.IsDown())
-            {
-                Console.WriteLine("Trim all sail");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.trimAllSails();
-            }
-
-            if (BringToPort.Value.IsDown())
-            {
-                Console.WriteLine("Bring to port");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.bringToPort();
-            }
-
-            if (BringToStarboard.Value.IsDown())
-            {
-                Console.WriteLine("Bring to starboard");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.bringToStarboard();
-            }
-
-            if (DeploySquares.Value.IsDown())
-            {
-                Console.WriteLine("Deploy squares");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.deploySquares();
-            }
-
-            if (ReefSquares.Value.IsDown())
-            {
-                Console.WriteLine("Reef squares");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.reefSquares();
-            }
-
-            if (DeployOthers.Value.IsDown())
-            {
-                Console.WriteLine("Deploy others");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.deployOthers();
-            }
-
-            if (ReefOthers.Value.IsDown())
-            {
-                Console.WriteLine("Reef others");
-                VirtualCrewManager.Instance.isCrewActive = true;
-                VirtualCrewManager.Instance.reefOthers();
-            }
-
             if (ScanItems.Value.IsDown())
             {
                 CrewNavigationCoordinator.Instance.ForceRingLookoutBell();
-            }
-
-            // If we release any buttons, stop automating the ship
-            if (DeployAllSail.Value.IsUp() || ReefAllSail.Value.IsUp() 
-                || EaseAllSail.Value.IsUp() || TrimAllSail.Value.IsUp() 
-                || BringToPort.Value.IsUp() || BringToStarboard.Value.IsUp()
-                || DeploySquares.Value.IsUp() || ReefSquares.Value.IsUp()
-                || DeployOthers.Value.IsUp() || ReefOthers.Value.IsUp())
-            {
-                VirtualCrewManager.Instance.isCrewActive = false;
-                VirtualCrewManager.Instance.stop();
             }
         }
 

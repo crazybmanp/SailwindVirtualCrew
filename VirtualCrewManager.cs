@@ -105,7 +105,7 @@ namespace SailwindVirtualCrew
             {
                 foreach (var gd in vesselData.sailGroups)
                 {
-                    var group = new SailGroup(gd.name);
+                    var group = new SailGroup(gd.name, id: gd.id);
                     if (gd.memberIdentifiers != null)
                         foreach (var id in gd.memberIdentifiers)
                             group.AddIdentifier(id);
@@ -127,6 +127,7 @@ namespace SailwindVirtualCrew
             {
                 if (SelectedGroup == group) SelectedGroup = null;
                 SailGroups.Remove(group);
+                RemoveFavoriteActionsForGroup(group.Id);
             }
         }
 
@@ -234,6 +235,158 @@ namespace SailwindVirtualCrew
 
             if (AllVesselsData.TryGetValue(CurrentVesselKey, out var vesselData) && vesselData.customWorkstationLocations != null)
                 vesselData.customWorkstationLocations.Remove(workstationKey);
+        }
+
+        public IReadOnlyList<FavoriteAction> FavoriteActions
+        {
+            get
+            {
+                var vesselData = GetCurrentVesselData();
+                return vesselData?.favoriteActions ?? new List<FavoriteAction>();
+            }
+        }
+
+        public void AddFavoriteAction(FavoriteAction action)
+        {
+            if (action == null) return;
+            var vesselData = GetCurrentVesselData();
+            if (vesselData == null) return;
+            var list = vesselData.favoriteActions ?? (vesselData.favoriteActions = new List<FavoriteAction>());
+            RefreshFavoriteActionGroupName(action);
+            list.Add(action);
+            CrewDebugLog.Ok("Favorites", "Created favorite action '" + action.DisplayName + "'");
+        }
+
+        public void RemoveFavoriteAction(FavoriteAction action)
+        {
+            if (action == null) return;
+            var vesselData = GetCurrentVesselData();
+            if (vesselData?.favoriteActions == null) return;
+            vesselData.favoriteActions.Remove(action);
+        }
+
+        public void RemoveFavoriteActionsForGroup(string groupId)
+        {
+            if (string.IsNullOrEmpty(groupId)) return;
+            var vesselData = GetCurrentVesselData();
+            if (vesselData?.favoriteActions == null) return;
+            vesselData.favoriteActions.RemoveAll(a => a.groupId == groupId);
+        }
+
+        public void SetFavoriteActionKey(FavoriteAction action, KeyCode key)
+        {
+            if (action == null) return;
+            var vesselData = GetCurrentVesselData();
+            if (vesselData?.favoriteActions == null) return;
+
+            if (key != KeyCode.None)
+            {
+                foreach (var other in vesselData.favoriteActions)
+                    if (other != action && other.keyCode == (int)key)
+                        other.keyCode = (int)KeyCode.None;
+            }
+
+            action.keyCode = (int)key;
+            CrewDebugLog.Ok("Favorites", "Set favorite action key '" + action.DisplayName + "' key=" + key);
+        }
+
+        public void InvokeFavoriteAction(FavoriteAction action)
+        {
+            if (action == null) return;
+            RefreshFavoriteActionGroupName(action);
+            var group = GetFavoriteActionGroup(action);
+            if (group == null)
+            {
+                CrewDebugLog.Warn("Favorites", "Favorite action group not found id='" + action.groupId + "' name='" + action.groupName + "'");
+                return;
+            }
+
+            InvokeFavoriteAction(group, action);
+            CrewDebugLog.Ok("Favorites", "Invoked favorite action '" + action.DisplayName + "'");
+        }
+
+        private void InvokeFavoriteAction(SailGroup group, FavoriteAction action)
+        {
+            switch (action.kind)
+            {
+                case FavoriteActionKind.Halyard:
+                    foreach (var sail in group.GetMembers(AllSails))
+                        AddWorkRequest(new WorkRequest(sail, "Halyard " + action.label,
+                            new WinchTarget(sail.getHalyardWinch(), action.target)));
+                    break;
+
+                case FavoriteActionKind.SimpleSheet:
+                    foreach (var sail in group.GetMembers(AllSails).OfType<SimpleSail>())
+                        AddWorkRequest(new WorkRequest(sail, "Sheet " + action.label,
+                            new WinchTarget(sail.getSheetWinch(), action.target)));
+                    break;
+
+                case FavoriteActionKind.RelativeSheet:
+                    foreach (var sail in group.GetMembers(AllSails).OfType<SimpleSail>())
+                    {
+                        var winch = sail.getSheetWinch();
+                        float target = Mathf.Clamp01(winch.rope.currentLength + action.delta);
+                        AddWorkRequest(new WorkRequest(sail, "Sheet " + action.label,
+                            new WinchTarget(winch, target)));
+                    }
+                    break;
+
+                case FavoriteActionKind.DualSheet:
+                    foreach (var sail in group.GetMembers(AllSails).OfType<DualSheetSail>()
+                                             .Where(s => s.getSubtype() == action.dualSheetSubtype))
+                    {
+                        AddWorkRequest(new WorkRequest(sail, "Port Sheet " + action.label,
+                            new WinchTarget(sail.getPortSheetWinch(), action.portTarget)));
+                        AddWorkRequest(new WorkRequest(sail, "Starboard Sheet " + action.label,
+                            new WinchTarget(sail.getStarboardSheetWinch(), action.starboardTarget)));
+                    }
+                    break;
+
+                case FavoriteActionKind.Trim:
+                    foreach (var sail in group.GetMembers(AllSails))
+                    {
+                        if (sail is SimpleSail simple)
+                            AddTrimRequest(new TrimRequest(simple));
+                        else if (sail is DualSheetSail dual)
+                        {
+                            if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Jib)
+                                AddJibTrimRequest(new JibTrimRequest(dual));
+                            else if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Square)
+                                AddSquareTrimRequest(new SquareTrimRequest(dual));
+                        }
+                    }
+                    break;
+            }
+        }
+
+        private SailGroup GetFavoriteActionGroup(FavoriteAction action)
+        {
+            var group = SailGroups.FirstOrDefault(g => g.Id == action.groupId);
+            if (group != null)
+                return group;
+
+            return SailGroups.FirstOrDefault(g => g.Name == action.groupName);
+        }
+
+        private void RefreshFavoriteActionGroupName(FavoriteAction action)
+        {
+            var group = GetFavoriteActionGroup(action);
+            if (group != null)
+                action.groupName = group.Name;
+        }
+
+        private VesselSaveData GetCurrentVesselData()
+        {
+            EnsureCurrentVesselKey();
+            if (CurrentVesselKey == null)
+                return null;
+            if (!AllVesselsData.ContainsKey(CurrentVesselKey))
+                AllVesselsData[CurrentVesselKey] = new VesselSaveData();
+
+            var vesselData = AllVesselsData[CurrentVesselKey];
+            if (vesselData.favoriteActions == null)
+                vesselData.favoriteActions = new List<FavoriteAction>();
+            return vesselData;
         }
 
         private void EnsureCurrentVesselKey()

@@ -18,6 +18,7 @@ namespace SailwindVirtualCrew
 
         private string groupNameBuffer = "";
         private bool   _renamingGroup  = false;
+        private bool   _creatingFavoriteAction = false;
 
         private const float ButtonHeight      = 28f;
         private const float BaseContentHeight = 300f;
@@ -46,7 +47,7 @@ namespace SailwindVirtualCrew
             }
 
             // Height accounting
-            float contentHeight = ButtonHeight; // header row
+            float contentHeight = ButtonHeight * 3; // favorite action controls + header row
             contentHeight += manager.SailGroups.Count * ButtonHeight;
             if (selectedGroup != null)
             {
@@ -74,6 +75,11 @@ namespace SailwindVirtualCrew
             var selectedGroup = manager.SelectedGroup;
 
             // ── Group list ──────────────────────────────────────────────────
+            if (GUILayout.Button(_creatingFavoriteAction ? "Cancel Favorite Action" : "Create Favorite Action"))
+                _creatingFavoriteAction = !_creatingFavoriteAction;
+            if (_creatingFavoriteAction)
+                GUILayout.Label("Select a group, then click an action.");
+
             GUILayout.BeginHorizontal();
             GUILayout.Label("Groups (click to select)", GUILayout.ExpandWidth(false));
             if (GUILayout.Button("New Group", GUILayout.Width(110)))
@@ -242,9 +248,18 @@ namespace SailwindVirtualCrew
                                             float target)
         {
             if (GUILayout.Button(label))
+            {
+                if (_creatingFavoriteAction)
+                {
+                    manager.AddFavoriteAction(FavoriteAction.Halyard(group, label, target));
+                    _creatingFavoriteAction = false;
+                    return;
+                }
+
                 foreach (var sail in group.GetMembers(allSails))
                     manager.AddWorkRequest(new WorkRequest(sail, "Halyard " + label,
                         new WinchTarget(sail.getHalyardWinch(), target)));
+            }
         }
 
         private void DrawGroupSimpleSheetButton(VirtualCrewManager manager, string label,
@@ -252,9 +267,18 @@ namespace SailwindVirtualCrew
                                                 float target)
         {
             if (GUILayout.Button(label))
+            {
+                if (_creatingFavoriteAction)
+                {
+                    manager.AddFavoriteAction(FavoriteAction.SimpleSheet(group, label, target));
+                    _creatingFavoriteAction = false;
+                    return;
+                }
+
                 foreach (var sail in group.GetMembers(allSails).OfType<SimpleSail>())
                     manager.AddWorkRequest(new WorkRequest(sail, "Sheet " + label,
                         new WinchTarget(sail.getSheetWinch(), target)));
+            }
         }
 
         private void DrawGroupRelativeSheetButton(VirtualCrewManager manager, string label,
@@ -262,6 +286,14 @@ namespace SailwindVirtualCrew
                                                   float delta)
         {
             if (GUILayout.Button(label))
+            {
+                if (_creatingFavoriteAction)
+                {
+                    manager.AddFavoriteAction(FavoriteAction.RelativeSheet(group, label, delta));
+                    _creatingFavoriteAction = false;
+                    return;
+                }
+
                 foreach (var sail in group.GetMembers(allSails).OfType<SimpleSail>())
                 {
                     var winch  = sail.getSheetWinch();
@@ -269,6 +301,7 @@ namespace SailwindVirtualCrew
                     manager.AddWorkRequest(new WorkRequest(sail, "Sheet " + label,
                         new WinchTarget(winch, target)));
                 }
+            }
         }
 
         private void DrawGroupDualSheetButton(VirtualCrewManager manager, string label,
@@ -277,6 +310,14 @@ namespace SailwindVirtualCrew
                                               float portTarget, float starboardTarget)
         {
             if (GUILayout.Button(label))
+            {
+                if (_creatingFavoriteAction)
+                {
+                    manager.AddFavoriteAction(FavoriteAction.DualSheet(group, label, subtype, portTarget, starboardTarget));
+                    _creatingFavoriteAction = false;
+                    return;
+                }
+
                 foreach (var sail in group.GetMembers(allSails).OfType<DualSheetSail>()
                                           .Where(s => s.getSubtype() == subtype))
                 {
@@ -285,12 +326,21 @@ namespace SailwindVirtualCrew
                     manager.AddWorkRequest(new WorkRequest(sail, "Starboard Sheet " + label,
                         new WinchTarget(sail.getStarboardSheetWinch(), starboardTarget)));
                 }
+            }
         }
 
         private void DrawGroupTrimButton(VirtualCrewManager manager,
                                          SailGroup group, IReadOnlyList<ICommonSailActions> allSails)
         {
             if (GUILayout.Button("Trim"))
+            {
+                if (_creatingFavoriteAction)
+                {
+                    manager.AddFavoriteAction(FavoriteAction.Trim(group));
+                    _creatingFavoriteAction = false;
+                    return;
+                }
+
                 foreach (var sail in group.GetMembers(allSails))
                 {
                     if (sail is SimpleSail simple)
@@ -303,6 +353,7 @@ namespace SailwindVirtualCrew
                             manager.AddSquareTrimRequest(new SquareTrimRequest(dual));
                     }
                 }
+            }
         }
     }
 }

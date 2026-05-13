@@ -19,6 +19,7 @@ namespace SailwindVirtualCrew
     [Serializable]
     public class SailGroupSaveData
     {
+        public string id;
         public string name;
         public List<string> memberIdentifiers = new List<string>();
     }
@@ -45,6 +46,7 @@ namespace SailwindVirtualCrew
         public List<SailGroupSaveData> sailGroups = new List<SailGroupSaveData>();
         public Dictionary<string, CrewRestLocationSaveData> crewRestLocations = new Dictionary<string, CrewRestLocationSaveData>();
         public Dictionary<string, WorkstationLocationSaveData> customWorkstationLocations = new Dictionary<string, WorkstationLocationSaveData>();
+        public List<FavoriteAction> favoriteActions = new List<FavoriteAction>();
     }
 
     [Serializable]

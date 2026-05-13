@@ -102,6 +102,7 @@
     <Compile Include="CrewStationTask.cs" />
     <Compile Include="CrewVisualFactory.cs" />
     <Compile Include="CrewSoundPlayer.cs" />
+    <Compile Include="FavoriteAction.cs" />
     <Compile Include="ModIntegrations.cs" />
     <Compile Include="ProxyBoat.cs" />
     <Compile Include="ProxyBoatBuilder.cs" />
@@ -135,6 +136,7 @@
     <Compile Include="Windows\SailGroupMembersWindow.cs" />
     <Compile Include="Windows\WorkRequestsWindow.cs" />
     <Compile Include="Windows\WorkstationCustomizerWindow.cs" />
+    <Compile Include="Windows\FavoriteActionsWindow.cs" />
     <Compile Include="Sails\DualSheetSail.cs" />
     <Compile Include="Sails\ICommonSailActions.cs" />
     <Compile Include="Patches\GPButtonRopeWinchPatches.cs" />

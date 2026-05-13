@@ -5,14 +5,18 @@ namespace SailwindVirtualCrew
 {
     public class SailGroup
     {
+        public const string AllSailsId = "all-sails";
+
+        public string Id { get; }
         public string Name { get; set; }
         public bool IsAllSails { get; }
 
         private readonly HashSet<string> memberIdentifiers = new HashSet<string>();
         public IReadOnlyCollection<string> MemberIdentifiers => memberIdentifiers;
 
-        public SailGroup(string name, bool isAllSails = false)
+        public SailGroup(string name, bool isAllSails = false, string id = null)
         {
+            Id = isAllSails ? AllSailsId : string.IsNullOrEmpty(id) ? System.Guid.NewGuid().ToString("N") : id;
             Name = name;
             IsAllSails = isAllSails;
         }
