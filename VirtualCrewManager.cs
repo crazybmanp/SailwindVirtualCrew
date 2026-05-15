@@ -52,9 +52,12 @@ namespace SailwindVirtualCrew
         private Dictionary<string, bool> portIsHub = new Dictionary<string, bool>();
         public int LastPortCrewRefreshDay { get; private set; } = -1;
         private float _lastGlobalTime = -1f;
+        private float _lastLookoutPassiveDecayGameHours = -1f;
 
         private const int SalaryCurrency = 0;
         private const int SalaryPerCrewPerDay = 10;
+        private const float BailMugUnits = 3f;
+        private const float BailBucketUnits = 10f;
 
         public int TotalSalaryPay { get; private set; }
         public int[] TotalSharePayByCurrency { get; private set; }
@@ -565,6 +568,7 @@ namespace SailwindVirtualCrew
             crewWinchInstructions = new Dictionary<GPButtonRopeWinch, WinchTarget>();
             AnchorWinches = new List<GPButtonRopeWinch>();
             _lastGlobalTime = -1f;
+            _lastLookoutPassiveDecayGameHours = -1f;
             _lastFirstOfficerLocalTime = -1f;
             _lastFirstOfficerTrimGameHours = -1f;
 
@@ -926,6 +930,34 @@ namespace SailwindVirtualCrew
         {
             float time = Sun.sun != null ? Sun.sun.globalTime : 0f;
             return GameState.day * 24f + time;
+        }
+
+        private void TickLookoutPassiveCertaintyDecay()
+        {
+            float now = GetCurrentGameHours();
+            if (_lastLookoutPassiveDecayGameHours < 0f)
+            {
+                _lastLookoutPassiveDecayGameHours = now;
+                return;
+            }
+
+            float deltaHours = now - _lastLookoutPassiveDecayGameHours;
+            if (deltaHours <= 0f)
+                return;
+
+            _lastLookoutPassiveDecayGameHours = now;
+
+            if (ActiveLookoutTask != null || LookoutCertainties == null || LookoutCertainties.Count == 0)
+                return;
+
+            foreach (string key in LookoutCertainties.Keys.ToList())
+            {
+                float certainty = Mathf.Clamp(LookoutCertainties[key] - deltaHours, 0f, 2f);
+                if (certainty <= 0f)
+                    LookoutCertainties.Remove(key);
+                else
+                    LookoutCertainties[key] = certainty;
+            }
         }
 
         public void StoreVisitedPorts(Dictionary<string, bool> visitedPorts)
@@ -1420,6 +1452,70 @@ namespace SailwindVirtualCrew
             BailRequests.Remove(request);
         }
 
+        private void TickQuartermasterBailing()
+        {
+            if (!Crew.Any(c => c.Role == ShipRole.Quartermaster && IsCrewAvailable(c)))
+                return;
+
+            var damage = GetCurrentBoatDamage();
+            if (damage == null)
+                return;
+
+            float waterLevel = damage.waterLevel;
+            int deckhandCount = Crew.Count(c => c.Role == ShipRole.Deckhand);
+            if (deckhandCount <= 0)
+                return;
+
+            int targetRequests = 0;
+            if (waterLevel >= 0.66f)
+            {
+                WakeSleepingDeckhands();
+                targetRequests = deckhandCount;
+            }
+            else if (waterLevel >= 0.35f)
+            {
+                targetRequests = deckhandCount >= 2 ? 2 : 1;
+            }
+            else if (waterLevel >= 0.15f)
+            {
+                targetRequests = 1;
+            }
+
+            if (targetRequests <= 0)
+                return;
+
+            int currentRequests = BailRequests.Count(r => r.Status != WorkRequestStatus.Complete);
+            for (int i = currentRequests; i < targetRequests; i++)
+                AddBailRequest(new BailRequest(damage, GetNextBailToolUnits()));
+        }
+
+        private void WakeSleepingDeckhands()
+        {
+            foreach (var sleep in SleepRequests
+                .Where(r => r.AssignedCrewman != null && r.AssignedCrewman.Role == ShipRole.Deckhand)
+                .ToList())
+            {
+                CancelSleepRequest(sleep);
+            }
+        }
+
+        private float GetNextBailToolUnits()
+        {
+            if (GameState.currentBoat == null)
+                return BailMugUnits;
+
+            int bucketCount = LocatorUtils.findItemCounts(new[] { "bucket" })[0];
+            int bucketUsersQueued = BailRequests.Count(r =>
+                r.Status != WorkRequestStatus.Complete
+                && r.UnitsPerScoop >= BailBucketUnits);
+            return bucketUsersQueued < bucketCount ? BailBucketUnits : BailMugUnits;
+        }
+
+        private static BoatDamage GetCurrentBoatDamage()
+        {
+            return GameState.lastBoat != null ? GameState.lastBoat.GetComponent<BoatDamage>() : null;
+        }
+
         public void CancelSquareTrimRequest(SquareTrimRequest request)
         {
             if (request.AssignedCrewman  != null) request.AssignedCrewman.CurrentTask  = null;
@@ -1600,6 +1696,7 @@ namespace SailwindVirtualCrew
             _lastGlobalTime = currentTime;
 
             TickFirstOfficer();
+            TickLookoutPassiveCertaintyDecay();
 
             // Auto-trigger sleep for exhausted, unoccupied crew, but only up to the number of
             // available beds. Crew with no bed to claim stay unoccupied so the player can still
@@ -1612,6 +1709,8 @@ namespace SailwindVirtualCrew
                 if (SleepRequests.Count >= autoTriggerBedCount.Value) break;
                 SleepRequests.Add(new SleepRequest(c));
             }
+
+            TickQuartermasterBailing();
 
             foreach (var req in WorkRequests)
             {

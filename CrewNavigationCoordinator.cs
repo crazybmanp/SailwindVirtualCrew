@@ -44,6 +44,11 @@ namespace SailwindVirtualCrew
             RingLookoutBell();
         }
 
+        internal void ResetLookoutBellCooldown()
+        {
+            _lastBellRealTime = float.MinValue;
+        }
+
         internal IReadOnlyList<CrewStation> GetWorkstations()
         {
             EnsureRuntimeReady();
