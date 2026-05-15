@@ -51,7 +51,7 @@ namespace SailwindVirtualCrew
         private static float GameHoursNow => GameState.day * 24f + Sun.sun.globalTime;
 
         // Quadrant: local 20:00–04:00 (wraps midnight)
-        private static bool InQuadrantWindow     => LocalTime  >= 20f || LocalTime  < 4f;
+        private static bool InQuadrantWindow     => LocalTime  >= 18f || LocalTime  < 6f;
         // Sun Compass: local 11:00–13:00
         private static bool InSunCompassWindow   => LocalTime  >= 11f && LocalTime  < 13f;
         // Chronometer: global 11:00–13:00

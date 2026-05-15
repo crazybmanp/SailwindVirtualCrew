@@ -9,9 +9,13 @@ namespace SailwindVirtualCrew
     public class LookoutWindow : MonoBehaviour, IWindowPosition
     {
         private bool showWindow = false;
+        private bool showIgnoredWindow = false;
         private Rect windowRect = new Rect(20, 300, 500, 400);
+        private Rect ignoredWindowRect = new Rect(540, 300, 280, 260);
         private static readonly int windowId = "VirtualCrewLookoutWindow".GetHashCode();
+        private static readonly int ignoredWindowId = "VirtualCrewIgnoredLandWindow".GetHashCode();
         private Vector2 scrollPos;
+        private Vector2 ignoredScrollPos;
         private const float LookoutEyeMarkerDiameter = 0.2f;
         private const float SampleMarkerDiameter = 0.2f;
         private const float MarkerUpdateInterval = 0.25f;
@@ -70,6 +74,9 @@ namespace SailwindVirtualCrew
             windowRect.width = DeveloperMode.IsEnabled ? 500f : 280f;
             if (_resizer.UserHeight > 0f) windowRect.height = _resizer.UserHeight;
             windowRect = GUI.Window(windowId, windowRect, DrawWindow, title);
+
+            if (showIgnoredWindow)
+                ignoredWindowRect = GUI.Window(ignoredWindowId, ignoredWindowRect, DrawIgnoredWindow, "Ignored Land");
         }
 
         private void DrawWindow(int id)
@@ -135,25 +142,29 @@ namespace SailwindVirtualCrew
             // ── Main report ───────────────────────────────────────────────────
             string report = "Scanning the horizon";
             bool hasAnyCertainty = false;
+            IslandHorizon reportedIsland = null;
             foreach (var (island, dist) in sorted)
             {
+                bool ignored = manager.IsLookoutIgnored(island);
                 float certainty = GetLookoutCertainty(island);
-                if (certainty > 0f)
+                if (!ignored && certainty > 0f)
                     hasAnyCertainty = true;
 
-                if (certainty >= 1f)
+                if (!ignored && certainty >= 1f)
                 {
                     string bearing = GetBearing(playerPos, island.GetPosition());
                     if (LookoutIslandKnowledge.TryIdentifyIsland(island, observerPos, lookout, _spyglassZoom, out string islandName, out _))
                         report = $"Land Sighted: {islandName} ({bearing})";
                     else
                         report = $"Land Sighted: {bearing}";
+                    reportedIsland = island;
                     break;
                 }
             }
             if (report == "Scanning the horizon" && hasAnyCertainty)
                 report = "Focusing on something.";
             GUILayout.Label(report);
+            DrawIgnoreControls(manager, reportedIsland);
 
             if (!DeveloperMode.IsEnabled)
             {
@@ -182,6 +193,75 @@ namespace SailwindVirtualCrew
             GUILayout.EndHorizontal();
 
             _resizer.HandleInWindow(ref windowRect);
+            GUI.DragWindow();
+        }
+
+        private void DrawIgnoreControls(VirtualCrewManager manager, IslandHorizon reportedIsland)
+        {
+            GUILayout.BeginHorizontal();
+            GUI.enabled = reportedIsland != null;
+            if (GUILayout.Button("Ignore for 24h"))
+                manager.IgnoreLookoutIsland(reportedIsland, 24f);
+            GUI.enabled = true;
+
+            bool hasIgnored = manager.HasIgnoredLookoutIslands();
+            GUI.enabled = hasIgnored || showIgnoredWindow;
+            if (GUILayout.Button(showIgnoredWindow ? "Hide Ignored" : "Show Ignored"))
+                showIgnoredWindow = !showIgnoredWindow;
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+
+            if (!hasIgnored)
+                showIgnoredWindow = false;
+        }
+
+        private void DrawIgnoredWindow(int id)
+        {
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Tab)
+                Event.current.Use();
+
+            var manager = VirtualCrewManager.Instance;
+            var tracker = IslandDistanceTracker.instance;
+            if (tracker == null || tracker.islands == null)
+            {
+                GUILayout.Label("No ignored landmasses.");
+                GUI.DragWindow();
+                return;
+            }
+
+            var ignored = tracker.islands
+                .Where(i => i != null && manager.IsLookoutIgnored(i))
+                .Select(i => (island: i, remaining: manager.GetLookoutIgnoreRemainingHours(i)))
+                .Where(x => x.remaining > 0f)
+                .OrderBy(x => GetBearing(GetPlayerPosition(), x.island.GetPosition()))
+                .ToList();
+
+            if (ignored.Count == 0)
+            {
+                GUILayout.Label("No ignored landmasses.");
+                GUI.DragWindow();
+                return;
+            }
+
+            var lookout = manager.Lookout;
+            Vector3 playerPos = GetPlayerPosition();
+            Vector3 observerPos = lookout != null ? GetObservationEyePosition(lookout) : GetPlayerEyePosition();
+
+            ignoredScrollPos = GUILayout.BeginScrollView(ignoredScrollPos, GUILayout.Height(190));
+            foreach (var item in ignored)
+            {
+                IslandHorizon island = item.island;
+                string bearing = GetBearing(playerPos, island.GetPosition());
+                string label = bearing;
+                if (lookout != null
+                    && LookoutIslandKnowledge.TryIdentifyIsland(island, observerPos, lookout, _spyglassZoom, out string islandName, out _))
+                    label = $"{islandName} ({bearing})";
+
+                if (GUILayout.Button($"{label}  {item.remaining:F1}h"))
+                    manager.ClearLookoutIgnore(island);
+            }
+            GUILayout.EndScrollView();
+
             GUI.DragWindow();
         }
 
@@ -238,11 +318,13 @@ namespace SailwindVirtualCrew
                 ? $"WAVE BLOCK {visibility.WaveBlockDistance:F0}m"
                 : "waves clear";
             float certainty = GetLookoutCertainty(island);
+            float ignoreRemaining = VirtualCrewManager.Instance.GetLookoutIgnoreRemainingHours(island);
             var idInfo = LookoutIslandKnowledge.GetIdentificationInfo(island, GetObservationEyePosition(lookout), lookout, _spyglassZoom);
             string visitedTag = idInfo.HasVisited ? "visited" : "unvisited";
             string identifiedTag = idInfo.Identified ? "identified" : "unidentified";
             string clearTag = idInfo.CurrentlyVisible ? "clear" : "blocked";
-            GUILayout.Label($"{GetIslandName(island)} ({dist:F0}m)  certainty:{certainty:F2}  [{(island.SceneLoaded() ? "scene" : "horizon")}]  {(certainty >= 1f ? "SIGHTED" : "")}");
+            string ignoreTag = ignoreRemaining > 0f ? $"IGNORED {ignoreRemaining:F1}h" : "";
+            GUILayout.Label($"{GetIslandName(island)} ({dist:F0}m)  certainty:{certainty:F2}  [{(island.SceneLoaded() ? "scene" : "horizon")}]  {(certainty >= 1f ? "SIGHTED" : "")} {ignoreTag}");
             GUILayout.Label($"  drop:{visibility.CurrentDrop:F1}m  peak:{visibility.PeakAboveRoot:F0}m  angle:{visibility.AngleDeg:F2} deg  {waveTag}");
             GUILayout.Label($"  name:{identifiedTag}  visit:{visitedTag}  current:{clearTag}  identify angle:{idInfo.EffectiveAngleDeg:F2}>{LookoutIslandKnowledge.IdentificationAngleDeg:F1} deg");
             if (visibility.WaveSampleCount > 0)

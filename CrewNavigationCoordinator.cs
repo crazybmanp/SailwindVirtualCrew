@@ -453,6 +453,17 @@ namespace SailwindVirtualCrew
             _actorsByOwner.Remove(owner);
         }
 
+        internal void CancelAllActiveTasks()
+        {
+            foreach (object owner in _actorsByOwner.Keys.ToList())
+                Cancel(owner);
+
+            foreach (var actor in _actorsByCrew.Values.Where(a => a.ActiveOwner != null).ToList())
+                actor.Cancel();
+
+            _actorsByOwner.Clear();
+        }
+
         private bool EnsureRuntimeReady()
         {
             _context = CrewBoatContextResolver.Resolve();

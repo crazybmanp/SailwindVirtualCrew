@@ -31,6 +31,7 @@ namespace SailwindVirtualCrew
         public Dictionary<string, VesselSaveData> AllVesselsData { get; set; }
         public string CurrentVesselKey { get; private set; }
         public Dictionary<string, float> LookoutCertainties { get; private set; }
+        public Dictionary<string, float> LookoutIgnoredUntil { get; private set; }
         public Dictionary<string, bool> VisitedPorts { get; private set; }
 
         public List<SailGroup> SailGroups { get; private set; }
@@ -75,6 +76,7 @@ namespace SailwindVirtualCrew
         {
             AllVesselsData = new Dictionary<string, VesselSaveData>();
             LookoutCertainties = new Dictionary<string, float>();
+            LookoutIgnoredUntil = new Dictionary<string, float>();
             VisitedPorts = new Dictionary<string, bool>();
             SailGroups = new List<SailGroup>();
             Crew = new List<Crewman>();
@@ -482,6 +484,8 @@ namespace SailwindVirtualCrew
 
         public void Reset()
         {
+            CrewNavigationCoordinator.Instance.CancelAllActiveTasks();
+
             foreach (var c in Crew)
                 c.CurrentTask = null;
             ActivePilotTask   = null;
@@ -737,6 +741,87 @@ namespace SailwindVirtualCrew
                 LookoutCertainties.Remove(key);
             else
                 LookoutCertainties[key] = certainty;
+        }
+
+        public void StoreLookoutIgnoredUntil(Dictionary<string, float> ignoredUntil)
+        {
+            LookoutIgnoredUntil = new Dictionary<string, float>();
+            if (ignoredUntil == null)
+                return;
+
+            float now = GetCurrentGameHours();
+            foreach (var kv in ignoredUntil)
+                if (!string.IsNullOrEmpty(kv.Key) && kv.Value > now)
+                    LookoutIgnoredUntil[kv.Key] = kv.Value;
+        }
+
+        public Dictionary<string, float> GetLookoutIgnoredUntilSnapshot()
+        {
+            PruneExpiredLookoutIgnores();
+            return new Dictionary<string, float>(LookoutIgnoredUntil ?? new Dictionary<string, float>());
+        }
+
+        public void IgnoreLookoutIsland(IslandHorizon island, float gameHours)
+        {
+            if (island == null || gameHours <= 0f)
+                return;
+
+            if (LookoutIgnoredUntil == null)
+                LookoutIgnoredUntil = new Dictionary<string, float>();
+
+            LookoutIgnoredUntil[LookoutVisibility.GetIslandKey(island)] = GetCurrentGameHours() + gameHours;
+        }
+
+        public void ClearLookoutIgnore(IslandHorizon island)
+        {
+            if (island == null || LookoutIgnoredUntil == null)
+                return;
+
+            LookoutIgnoredUntil.Remove(LookoutVisibility.GetIslandKey(island));
+        }
+
+        public bool IsLookoutIgnored(IslandHorizon island)
+        {
+            return GetLookoutIgnoreRemainingHours(island) > 0f;
+        }
+
+        public float GetLookoutIgnoreRemainingHours(IslandHorizon island)
+        {
+            if (island == null || LookoutIgnoredUntil == null)
+                return 0f;
+
+            string key = LookoutVisibility.GetIslandKey(island);
+            if (!LookoutIgnoredUntil.TryGetValue(key, out float until))
+                return 0f;
+
+            float remaining = until - GetCurrentGameHours();
+            if (remaining > 0f)
+                return remaining;
+
+            LookoutIgnoredUntil.Remove(key);
+            return 0f;
+        }
+
+        public bool HasIgnoredLookoutIslands()
+        {
+            PruneExpiredLookoutIgnores();
+            return LookoutIgnoredUntil != null && LookoutIgnoredUntil.Count > 0;
+        }
+
+        private void PruneExpiredLookoutIgnores()
+        {
+            if (LookoutIgnoredUntil == null || LookoutIgnoredUntil.Count == 0)
+                return;
+
+            float now = GetCurrentGameHours();
+            foreach (string key in LookoutIgnoredUntil.Where(kv => kv.Value <= now).Select(kv => kv.Key).ToList())
+                LookoutIgnoredUntil.Remove(key);
+        }
+
+        private static float GetCurrentGameHours()
+        {
+            float time = Sun.sun != null ? Sun.sun.globalTime : 0f;
+            return GameState.day * 24f + time;
         }
 
         public void StoreVisitedPorts(Dictionary<string, bool> visitedPorts)

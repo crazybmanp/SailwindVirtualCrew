@@ -51,6 +51,7 @@ namespace SailwindVirtualCrew
                     ? new Dictionary<int, CargoPaySaveData>(mgr.CargoPayRecords)
                     : new Dictionary<int, CargoPaySaveData>(),
                 lookoutCertainties = mgr.GetLookoutCertaintySnapshot(),
+                lookoutIgnoredUntil = mgr.GetLookoutIgnoredUntilSnapshot(),
                 visitedPorts = mgr.GetVisitedPortsSnapshot()
             };
             ModSave.Save(Plugin.Instance.Info, container);
@@ -68,6 +69,7 @@ namespace SailwindVirtualCrew
             VirtualCrewManager.Instance.RestorePortPools(data.portCrewPools);
             VirtualCrewManager.Instance.RestorePayData(data.totalSalaryPay, data.totalSharePayByCurrency, data.cargoPayRecords);
             VirtualCrewManager.Instance.StoreLookoutCertainties(data.lookoutCertainties);
+            VirtualCrewManager.Instance.StoreLookoutIgnoredUntil(data.lookoutIgnoredUntil);
             VirtualCrewManager.Instance.StoreVisitedPorts(data.visitedPorts);
             if (data.windowPositions != null)
                 foreach (var w in Plugin.Instance.GetComponents<IWindowPosition>())

@@ -86,6 +86,7 @@ namespace SailwindVirtualCrew
         public int[] totalSharePayByCurrency;
         public Dictionary<int, CargoPaySaveData> cargoPayRecords;
         public Dictionary<string, float> lookoutCertainties;
+        public Dictionary<string, float> lookoutIgnoredUntil;
         public Dictionary<string, bool> visitedPorts;
     }
 }
