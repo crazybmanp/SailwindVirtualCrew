@@ -1749,6 +1749,12 @@ namespace SailwindVirtualCrew
             return hour < 0f ? hour + 24f : hour;
         }
 
+        private bool HasNavigationTimekeepingDevice()
+        {
+            return HasNavigationTool(NavigationMethod.Chronometer)
+                || HasNavigationTool(NavigationMethod.Chronocompass);
+        }
+
         // Called once per second from Plugin.Update(). Assigns open requests to free
         // deckhands and marks completed tasks as done.
         public void Tick()
@@ -1840,7 +1846,7 @@ namespace SailwindVirtualCrew
 
             TrimRequests.RemoveAll(r => r.Status == WorkRequestStatus.Complete);
 
-            AssignOpenWorkRequestsByDeckhand();
+            AssignOpenDeckhandTasksByDistance();
 
             foreach (var trim in TrimRequests)
             {
@@ -1971,7 +1977,8 @@ namespace SailwindVirtualCrew
                                 nav.Method,
                                 GameState.day, Sun.sun.localTime,
                                 nav.CanEstimateLatitude,  trueLat + (nav.CanEstimateLatitude  ? latErr : 0f),
-                                nav.CanEstimateLongitude, trueLon + (nav.CanEstimateLongitude ? lonErr : 0f));
+                                nav.CanEstimateLongitude, trueLon + (nav.CanEstimateLongitude ? lonErr : 0f),
+                                HasNavigationTimekeepingDevice());
                             nav.OnComplete?.Invoke(result);
                         }
                     }
@@ -1994,14 +2001,6 @@ namespace SailwindVirtualCrew
             }
 
             MooringRequests.RemoveAll(r => r.Status == WorkRequestStatus.Complete);
-
-            foreach (var mooring in MooringRequests)
-            {
-                if (mooring.Status != WorkRequestStatus.Open) continue;
-                var crewman = Crew.FirstOrDefault(c => !c.IsOccupied && c.Role == ShipRole.Deckhand);
-                if (crewman == null) break;
-                mooring.BeginPositioning(crewman);
-            }
 
             // Bail requests: tick active ones, then assign free deckhands to open ones.
             foreach (var bail in BailRequests)
@@ -2063,49 +2062,47 @@ namespace SailwindVirtualCrew
             SleepRequests.Add(new SleepRequest(crewman));
         }
 
-        private void AssignOpenWorkRequestsByDeckhand()
+        private void AssignOpenDeckhandTasksByDistance()
         {
-            var openRequests = WorkRequests
-                .Where(r => r.Status == WorkRequestStatus.Open)
-                .ToList();
-            if (openRequests.Count == 0)
-                return;
-
             foreach (var crewman in Crew.Where(c => !c.IsOccupied && c.Role == ShipRole.Deckhand).ToList())
             {
-                if (openRequests.Count == 0)
+                var ranked = GetOpenDeckhandTaskCandidates(crewman)
+                    .OrderBy(c => c.Distance)
+                    .ToList();
+
+                if (ranked.Count == 0)
                     break;
 
-                var request = FindClosestOpenWorkRequest(crewman, openRequests);
-                if (request == null)
-                    continue;
+                CrewDebugLog.Ok("RuntimeNav",
+                    "Task distance ranking for crew='" + crewman.Name + "': "
+                    + string.Join(", ", ranked.Select(c => c.Label + "=" + FormatDistance(c.Distance)).ToArray()));
 
-                crewman.CurrentTask = request;
-                request.AssignedCrewman = crewman;
-                request.BeginPositioning(crewman);
-                openRequests.Remove(request);
+                ranked[0].Begin(crewman);
             }
         }
 
-        private WorkRequest FindClosestOpenWorkRequest(Crewman crewman, List<WorkRequest> openRequests)
+        private IEnumerable<DeckhandTaskCandidate> GetOpenDeckhandTaskCandidates(Crewman crewman)
         {
-            if (crewman == null || openRequests == null || openRequests.Count == 0)
-                return null;
+            foreach (var request in WorkRequests.Where(r => r.Status == WorkRequestStatus.Open))
+            {
+                yield return new DeckhandTaskCandidate(
+                    GetWorkRequestLabel(request),
+                    EstimateDistanceToWorkRequest(crewman, request),
+                    c =>
+                    {
+                        c.CurrentTask = request;
+                        request.AssignedCrewman = c;
+                        request.BeginPositioning(c);
+                    });
+            }
 
-            var ranked = openRequests
-                .Select(r => new
-                {
-                    Request = r,
-                    Distance = EstimateDistanceToWorkRequest(crewman, r)
-                })
-                .OrderBy(x => x.Distance)
-                .ToList();
-
-            CrewDebugLog.Ok("RuntimeNav",
-                "Task distance ranking for crew='" + crewman.Name + "': "
-                + string.Join(", ", ranked.Select(x => GetWorkRequestLabel(x.Request) + "=" + FormatDistance(x.Distance)).ToArray()));
-
-            return ranked.FirstOrDefault()?.Request;
+            foreach (var request in MooringRequests.Where(r => r.Status == WorkRequestStatus.Open))
+            {
+                yield return new DeckhandTaskCandidate(
+                    request.CommandName,
+                    EstimateDistanceToMooringRequest(crewman, request),
+                    c => request.BeginPositioning(c));
+            }
         }
 
         private static float EstimateDistanceToWorkRequest(Crewman crewman, WorkRequest request)
@@ -2114,6 +2111,14 @@ namespace SailwindVirtualCrew
             return winch
                 ? CrewNavigationCoordinator.Instance.EstimateDistanceToWinch(crewman, winch)
                 : float.MaxValue;
+        }
+
+        private static float EstimateDistanceToMooringRequest(Crewman crewman, MooringRequest request)
+        {
+            if (request == null || !request.TryGetWorkLocalPosition(out var localPosition))
+                return float.MaxValue;
+
+            return CrewNavigationCoordinator.Instance.EstimateDistanceToLocalPosition(crewman, localPosition);
         }
 
         private static GPButtonRopeWinch GetPrimaryWinch(WorkRequest request)
@@ -2136,6 +2141,20 @@ namespace SailwindVirtualCrew
             return float.IsInfinity(distance) || distance == float.MaxValue
                 ? "unreachable"
                 : distance.ToString("0.0") + "m";
+        }
+
+        private sealed class DeckhandTaskCandidate
+        {
+            internal string Label { get; }
+            internal float Distance { get; }
+            internal Action<Crewman> Begin { get; }
+
+            internal DeckhandTaskCandidate(string label, float distance, Action<Crewman> begin)
+            {
+                Label = label;
+                Distance = distance;
+                Begin = begin;
+            }
         }
 
         public void CancelSleepRequest(SleepRequest request)

@@ -15,13 +15,19 @@ namespace SailwindVirtualCrew
 
         public NavigationResult(NavigationMethod method, int day, float localTime,
             bool hasLat, float lat, bool hasLon, float lon)
+            : this(method, day, localTime, hasLat, lat, hasLon, lon, false)
+        {
+        }
+
+        public NavigationResult(NavigationMethod method, int day, float localTime,
+            bool hasLat, float lat, bool hasLon, float lon, bool hasPreciseTime)
         {
             Method        = method;
             HasLatitude   = hasLat;
             HasLongitude  = hasLon;
             LatitudeText  = hasLat ? FormatLat(lat) : null;
             LongitudeText = hasLon ? FormatLon(lon) : null;
-            Header = FormatHeader(method, day, localTime);
+            Header = FormatHeader(method, day, localTime, hasPreciseTime);
         }
 
         public static NavigationResult Failure(NavigationMethod method, WeatherState weather)
@@ -37,9 +43,10 @@ namespace SailwindVirtualCrew
             FailureMessage = failureMessage;
         }
 
-        private static string FormatHeader(NavigationMethod method, int day, float localTime)
+        private static string FormatHeader(NavigationMethod method, int day, float localTime, bool hasPreciseTime)
         {
-            bool preciseTime = method == NavigationMethod.Chronometer
+            bool preciseTime = hasPreciseTime
+                            || method == NavigationMethod.Chronometer
                             || method == NavigationMethod.Chronocompass;
             string timeStr  = preciseTime ? $"H{(int)localTime}" : GetTimePeriod(localTime);
             return $"D{day} {timeStr} {GetDeviceLabel(method)}";

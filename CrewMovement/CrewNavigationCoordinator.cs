@@ -411,17 +411,7 @@ namespace SailwindVirtualCrew
             if (crewman == null || !winch || !EnsureRuntimeReady())
                 return float.MaxValue;
 
-            Vector3 fromLocal;
-            if (_actorsByCrew.TryGetValue(crewman, out var actor) && actor.IsValid)
-                fromLocal = actor.CurrentLocalPosition;
-            else if (VirtualCrewManager.Instance.TryGetCrewRestLocation(crewman, out var restLocal, out _))
-            {
-                if (TryProjectLocalToNavMesh(restLocal, out var projectedRestLocal))
-                    restLocal = projectedRestLocal;
-                fromLocal = restLocal;
-            }
-            else
-                fromLocal = GetDefaultStartLocal();
+            Vector3 fromLocal = GetCrewReferenceLocal(crewman);
 
             var station = _stations
                 .Where(s => IsStationForWinch(s, winch))
@@ -429,6 +419,18 @@ namespace SailwindVirtualCrew
                 .FirstOrDefault();
 
             return station == null ? float.MaxValue : Vector3.Distance(fromLocal, station.ProjectedLocalStand);
+        }
+
+        internal float EstimateDistanceToLocalPosition(Crewman crewman, Vector3 destinationLocal, float maxNavMeshDistance = 4f)
+        {
+            if (crewman == null || !EnsureRuntimeReady())
+                return float.MaxValue;
+
+            Vector3 fromLocal = GetCrewReferenceLocal(crewman);
+            if (_navMeshProvider.TryGetWorldOnNavMeshQuiet(destinationLocal, maxNavMeshDistance, out var destinationWorld))
+                destinationLocal = _navMeshProvider.WorldToProxyLocal(destinationWorld);
+
+            return Vector3.Distance(fromLocal, destinationLocal);
         }
 
         internal void Complete(object owner)
@@ -660,6 +662,22 @@ namespace SailwindVirtualCrew
                 return _proxyBoat.Root.transform.InverseTransformPoint(_proxyBoat.Bounds.center);
 
             return Vector3.zero;
+        }
+
+        private Vector3 GetCrewReferenceLocal(Crewman crewman)
+        {
+            if (crewman != null && _actorsByCrew.TryGetValue(crewman, out var actor) && actor.IsValid)
+                return actor.CurrentLocalPosition;
+
+            if (crewman != null && VirtualCrewManager.Instance.TryGetCrewRestLocation(crewman, out var restLocal, out _))
+            {
+                if (_navMeshProvider != null && _navMeshProvider.TryGetWorldOnNavMeshQuiet(restLocal, GetNavMeshSearchDistance(), out var restWorld))
+                    return _navMeshProvider.WorldToProxyLocal(restWorld);
+
+                return restLocal;
+            }
+
+            return GetDefaultStartLocal();
         }
 
         private float GetNavMeshSearchDistance()

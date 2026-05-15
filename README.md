@@ -157,6 +157,7 @@ Tools:
 ## Suspected Issues
 
 - Very little testing has been done around adding/removing sails from the ship.
+- Some scenarios seem to cause deckhands to take the "furthest" job from them rather than the closest, but I haven't found a clean repro yet.
 
 ---
 

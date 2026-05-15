@@ -37,6 +37,16 @@ namespace SailwindVirtualCrew
             return ropeInfo.Side == Side && !ropeInfo.IsMoored;
         }
 
+        internal bool TryGetWorkLocalPosition(out Vector3 localPosition)
+        {
+            localPosition = Vector3.zero;
+            if (!RefreshTarget())
+                return false;
+
+            localPosition = ropeInfo.AnchorLocal;
+            return true;
+        }
+
         public void BeginPositioning(Crewman crewman)
         {
             AssignedCrewman = crewman;
