@@ -69,6 +69,8 @@ namespace SailwindVirtualCrew
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Deckhand));
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Pilot));
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Navigator));
+            if (!mgr.Crew.Exists(c => c.Role == ShipRole.ChiefOfficer))
+                mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.ChiefOfficer));
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Lookout));
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Quartermaster));
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Supercargo));

@@ -135,7 +135,7 @@ namespace SailwindVirtualCrew
         {
             var pilot = VirtualCrewManager.Instance.Pilot;
             if (pilot == null) return 0f;
-            float range = (6f - pilot.Intelligence)*2;
+            float range = Mathf.Max(0f, (6f - pilot.Intelligence) * 2f);
             return Random.Range(-range, range);
         }
 

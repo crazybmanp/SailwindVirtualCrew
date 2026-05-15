@@ -11,4 +11,16 @@ namespace SailwindVirtualCrew
         Supercargo,
         Lookout
     }
+
+    public static class ShipRoleExtensions
+    {
+        public static string DisplayName(this ShipRole role)
+        {
+            switch (role)
+            {
+                case ShipRole.ChiefOfficer: return "First Officer";
+                default:                    return role.ToString();
+            }
+        }
+    }
 }

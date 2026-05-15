@@ -80,7 +80,8 @@ namespace SailwindVirtualCrew
             {
                 bool sel = c == selectedShipCrew;
                 string fatigue = DeveloperMode.IsEnabled ? "" : $"  [{c.FatigueTag}]";
-                string label = sel ? $"► {c.Name}  ({c.Role}){fatigue}" : $"  {c.Name}  ({c.Role}){fatigue}";
+                string roleName = c.Role.DisplayName();
+                string label = sel ? $"► {c.Name}  ({roleName}){fatigue}" : $"  {c.Name}  ({roleName}){fatigue}";
                 if (GUILayout.Button(label))
                 {
                     if (sel) { selectedShipCrew = null; crewRenameBuffer = ""; _renamingShipCrew = false; }
@@ -159,7 +160,8 @@ namespace SailwindVirtualCrew
                 foreach (var c in avail)
                 {
                     bool sel = c == selectedAvailable;
-                    string label = sel ? $"► {c.Name}  ({c.Role})" : $"  {c.Name}  ({c.Role})";
+                    string roleName = c.Role.DisplayName();
+                    string label = sel ? $"► {c.Name}  ({roleName})" : $"  {c.Name}  ({roleName})";
                     if (GUILayout.Button(label))
                     {
                         selectedAvailable = sel ? null : c;
@@ -171,11 +173,16 @@ namespace SailwindVirtualCrew
                 if (selectedAvailable != null)
                 {
                     GUILayout.Label(StatLine(selectedAvailable));
+                    bool canHire = mgr.CanHireCrew(selectedAvailable, out string hireReason);
+                    GUI.enabled = canHire;
                     if (GUILayout.Button($"Hire {selectedAvailable.Name}"))
                     {
                         mgr.HireCrew(selectedAvailable);
                         selectedAvailable = null;
                     }
+                    GUI.enabled = true;
+                    if (!canHire)
+                        GUILayout.Label(hireReason);
                 }
             }
 

@@ -16,13 +16,19 @@ namespace SailwindVirtualCrew
         private readonly int _wisdom;
         private readonly int _charisma;
 
+        internal int BaseStrength     => _strength;
+        internal int BaseDexterity    => _dexterity;
+        internal int BaseIntelligence => _intelligence;
+        internal int BaseWisdom       => _wisdom;
+        internal int BaseCharisma     => _charisma;
+
         // True stats — return 1 when exhausted (except Constitution, which is never impaired).
-        public int Strength     => IsExhausted ? 1 : _strength;
-        public int Dexterity    => IsExhausted ? 1 : _dexterity;
+        public int Strength     => EffectiveStat(_strength);
+        public int Dexterity    => EffectiveStat(_dexterity);
         public int Constitution { get; }
-        public int Intelligence => IsExhausted ? 1 : _intelligence;
-        public int Wisdom       => IsExhausted ? 1 : _wisdom;
-        public int Charisma     => IsExhausted ? 1 : _charisma;
+        public int Intelligence => EffectiveStat(_intelligence);
+        public int Wisdom       => EffectiveStat(_wisdom);
+        public int Charisma     => EffectiveStat(_charisma);
 
         // Advertised stats — shown in UI (offset -1..+3 from true, minimum 1)
         public int AdvStrength     { get; }
@@ -117,6 +123,12 @@ namespace SailwindVirtualCrew
 
         private static int Advertise(int trueStat, Random rng) =>
             Math.Max(1, trueStat + rng.Next(-1, 4));
+
+        private int EffectiveStat(int baseValue)
+        {
+            if (IsExhausted) return 1;
+            return Math.Max(1, baseValue + VirtualCrewManager.Instance.GetFirstOfficerStatModifier(this));
+        }
 
         // Returns the two role-specific advertised stats shown in the UI.
         public string AdvertisedStatLine()
