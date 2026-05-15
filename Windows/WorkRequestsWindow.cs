@@ -41,13 +41,14 @@ namespace SailwindVirtualCrew
             var squareTrimRequests = manager.SquareTrimRequests;
             var navigateRequests   = manager.NavigateRequests;
             var mooringRequests    = manager.MooringRequests;
+            var bailRequests       = manager.BailRequests;
             var sleepRequests      = manager.SleepRequests;
             var pilotTask          = manager.ActivePilotTask;
             var lookoutTask        = manager.ActiveLookoutTask;
 
             int totalTasks = requests.Count + trimRequests.Count
                            + jibTrimRequests.Count + squareTrimRequests.Count
-                           + navigateRequests.Count + mooringRequests.Count + sleepRequests.Count
+                           + navigateRequests.Count + mooringRequests.Count + bailRequests.Count + sleepRequests.Count
                            + (pilotTask   != null ? 1 : 0)
                            + (lookoutTask != null ? 1 : 0);
 
@@ -79,6 +80,9 @@ namespace SailwindVirtualCrew
                 foreach (var r in mooringRequests)
                     taskListHeight += (r.Status == WorkRequestStatus.InProgress || r.Status == WorkRequestStatus.Positioning)
                         ? InProgressTaskHeight : OpenTaskHeight;
+                foreach (var r in bailRequests)
+                    taskListHeight += r.Status == WorkRequestStatus.InProgress
+                        ? InProgressTaskHeight : OpenTaskHeight;
                 foreach (var r in sleepRequests)
                     taskListHeight += (r.Status == WorkRequestStatus.InProgress || r.Status == WorkRequestStatus.Positioning)
                         ? InProgressTaskHeight : OpenTaskHeight;
@@ -103,6 +107,7 @@ namespace SailwindVirtualCrew
             var squareTrimRequests = manager.SquareTrimRequests;
             var navigateRequests   = manager.NavigateRequests;
             var mooringRequests    = manager.MooringRequests;
+            var bailRequests       = manager.BailRequests;
             var sleepRequests      = manager.SleepRequests;
             var pilotTask          = manager.ActivePilotTask;
             var lookoutTask        = manager.ActiveLookoutTask;
@@ -111,7 +116,7 @@ namespace SailwindVirtualCrew
 
             if (requests.Count == 0 && trimRequests.Count == 0
              && jibTrimRequests.Count == 0 && squareTrimRequests.Count == 0
-             && navigateRequests.Count == 0 && mooringRequests.Count == 0 && sleepRequests.Count == 0
+             && navigateRequests.Count == 0 && mooringRequests.Count == 0 && bailRequests.Count == 0 && sleepRequests.Count == 0
              && pilotTask == null && lookoutTask == null)
             {
                 GUILayout.Label("No tasks queued.");
@@ -286,6 +291,28 @@ namespace SailwindVirtualCrew
                 }
             }
             if (mooringToCancel != null) manager.CancelMooringRequest(mooringToCancel);
+
+            BailRequest bailToCancel = null;
+            foreach (var bail in bailRequests)
+            {
+                if (bail.Status == WorkRequestStatus.Open)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("[Waiting] Bail Until Empty (" + bail.ToolName + ")");
+                    if (GUILayout.Button("X", GUILayout.Width(28))) bailToCancel = bail;
+                    GUILayout.EndHorizontal();
+                }
+                else if (bail.Status == WorkRequestStatus.InProgress)
+                {
+                    string phase = bail.IsPickingUp ? "scooping" : "dumping";
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("[" + bail.AssignedCrewman.Name + "] Bailing, " + phase + " (" + bail.ToolName + ")");
+                    if (GUILayout.Button("X", GUILayout.Width(28))) bailToCancel = bail;
+                    GUILayout.EndHorizontal();
+                    DrawProgressBar(bail.GetProgress());
+                }
+            }
+            if (bailToCancel != null) manager.CancelBailRequest(bailToCancel);
 
             SleepRequest sleepToCancel = null;
             foreach (var sleep in sleepRequests)

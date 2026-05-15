@@ -50,6 +50,28 @@ namespace SailwindVirtualCrew
             return found;
         }
 
+        public static bool[] FindItemsOnCurrentVessel(string[] targetItemNames)
+        {
+            if (targetItemNames == null || targetItemNames.Length == 0)
+                return new bool[0];
+
+            bool[] found = new bool[targetItemNames.Length];
+            ShipItem[] allItems = GameObject.FindObjectsOfType<ShipItem>();
+            foreach (ShipItem item in allItems)
+            {
+                if (!IsItemAvailableOnCurrentVessel(item))
+                    continue;
+
+                for (int i = 0; i < targetItemNames.Length; i++)
+                {
+                    if (!found[i] && item.name == targetItemNames[i])
+                        found[i] = true;
+                }
+            }
+
+            return found;
+        }
+
         public static List<UnityEngine.Component> FindBedsOnBoat()
         {
             var beds = new List<UnityEngine.Component>();

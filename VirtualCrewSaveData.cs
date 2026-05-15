@@ -64,6 +64,17 @@ namespace SailwindVirtualCrew
     }
 
     [Serializable]
+    public class NavigatorToolScanSaveData
+    {
+        public bool hasChronocompass;
+        public bool hasChronometer;
+        public bool hasCompass;
+        public bool hasQuadrant;
+        public bool hasSunCompass;
+        public bool hasChipLog;
+    }
+
+    [Serializable]
     public class VesselSaveData
     {
         public string friendlyName;
@@ -89,5 +100,6 @@ namespace SailwindVirtualCrew
         public Dictionary<string, float> lookoutCertainties;
         public Dictionary<string, float> lookoutIgnoredUntil;
         public Dictionary<string, bool> visitedPorts;
+        public NavigatorToolScanSaveData navigatorToolScan;
     }
 }

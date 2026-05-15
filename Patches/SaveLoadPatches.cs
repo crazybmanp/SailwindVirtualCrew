@@ -34,6 +34,7 @@ namespace SailwindVirtualCrew
             var windowPositions = new Dictionary<string, float[]>();
             foreach (var w in Plugin.Instance.GetComponents<IWindowPosition>())
                 windowPositions[w.WindowKey] = w.GetPosition();
+            var navigatorWindow = Plugin.Instance.GetComponent<NavigatorWindow>();
 
             var container = new VirtualCrewSaveData
             {
@@ -53,7 +54,8 @@ namespace SailwindVirtualCrew
                 lastPortCrewRefreshDay = mgr.LastPortCrewRefreshDay,
                 lookoutCertainties = mgr.GetLookoutCertaintySnapshot(),
                 lookoutIgnoredUntil = mgr.GetLookoutIgnoredUntilSnapshot(),
-                visitedPorts = mgr.GetVisitedPortsSnapshot()
+                visitedPorts = mgr.GetVisitedPortsSnapshot(),
+                navigatorToolScan = navigatorWindow != null ? navigatorWindow.GetToolScanSaveData() : null
             };
             ModSave.Save(Plugin.Instance.Info, container);
         }
@@ -73,6 +75,9 @@ namespace SailwindVirtualCrew
             VirtualCrewManager.Instance.StoreLookoutCertainties(data.lookoutCertainties);
             VirtualCrewManager.Instance.StoreLookoutIgnoredUntil(data.lookoutIgnoredUntil);
             VirtualCrewManager.Instance.StoreVisitedPorts(data.visitedPorts);
+            var navigatorWindow = Plugin.Instance.GetComponent<NavigatorWindow>();
+            if (navigatorWindow != null)
+                navigatorWindow.RestoreToolScanSaveData(data.navigatorToolScan);
             if (data.windowPositions != null)
                 foreach (var w in Plugin.Instance.GetComponents<IWindowPosition>())
                     if (data.windowPositions.TryGetValue(w.WindowKey, out var pos) && pos.Length >= 2)

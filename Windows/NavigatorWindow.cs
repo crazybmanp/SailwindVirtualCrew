@@ -63,6 +63,8 @@ namespace SailwindVirtualCrew
         private WeatherState currentWeather = WeatherState.Clear;
         private float weatherPollTimer = 0f;
         private const float WeatherPollInterval = 30f;
+        private const float ToolScanIntervalSeconds = 30f * 60f;
+        private float lastToolScanRealTime = float.MinValue;
 
         private void Update()
         {
@@ -75,6 +77,9 @@ namespace SailwindVirtualCrew
                 currentWeather   = WeatherUtils.GetWeatherState();
                 weatherPollTimer = WeatherPollInterval;
             }
+
+            if (ShouldAutoScanTools())
+                ScanForTools();
         }
 
         private void OnGUI()
@@ -86,8 +91,10 @@ namespace SailwindVirtualCrew
             var navigator = manager.Navigator;
             var pending   = manager.NavigateRequests.Count > 0
                             ? manager.NavigateRequests[0] : null;
+            bool showLocalTime = ShouldShowLocalTime(manager, navigator);
 
             float contentHeight = ButtonHeight * 2                               // name + stats
+                                + (showLocalTime ? ButtonHeight : 0f)            // chronometer local time
                                 + ButtonHeight                                   // Search for Tools button
                                 + 4f + ButtonHeight                              // space + "Equipment:"
                                 + 6 * ButtonHeight                               // 6 tool status labels
@@ -151,6 +158,9 @@ namespace SailwindVirtualCrew
                 GUILayout.Label($"Dexterity: {navigator.Dexterity}   Intelligence: {navigator.Intelligence}");
             else
                 GUILayout.Label($"Dexterity: {navigator.AdvDexterity}   Intelligence: {navigator.AdvIntelligence}");
+
+            if (ShouldShowLocalTime(manager, navigator))
+                GUILayout.Label($"Local Time: {FormatLocalTime10Minute()}");
 
             // ── Tool search ─────────────────────────────────────────────────
             if (GUILayout.Button("Search for Tools"))
@@ -240,6 +250,55 @@ namespace SailwindVirtualCrew
 
         private static string Check(bool value) => value ? "[x]" : "[ ]";
 
+        private bool ShouldShowLocalTime(VirtualCrewManager manager, Crewman navigator)
+        {
+            return manager.IsCrewAvailable(navigator) && hasChronometer;
+        }
+
+        private static string FormatLocalTime10Minute()
+        {
+            int totalMinutes = Mathf.RoundToInt(Sun.sun.localTime * 60f / 10f) * 10;
+            totalMinutes %= 24 * 60;
+            if (totalMinutes < 0)
+                totalMinutes += 24 * 60;
+
+            int hour = totalMinutes / 60;
+            int minute = totalMinutes % 60;
+            return $"{hour:00}:{minute:00}";
+        }
+
+        private bool ShouldAutoScanTools()
+        {
+            return Time.realtimeSinceStartup - lastToolScanRealTime >= ToolScanIntervalSeconds;
+        }
+
+        public NavigatorToolScanSaveData GetToolScanSaveData()
+        {
+            return new NavigatorToolScanSaveData
+            {
+                hasChronocompass = hasChronocompass,
+                hasChronometer = hasChronometer,
+                hasCompass = hasCompass,
+                hasQuadrant = hasQuadrant,
+                hasSunCompass = hasSunCompass,
+                hasChipLog = hasChipLog
+            };
+        }
+
+        public void RestoreToolScanSaveData(NavigatorToolScanSaveData data)
+        {
+            if (data == null)
+                return;
+
+            hasChronocompass = data.hasChronocompass;
+            hasChronometer = data.hasChronometer;
+            hasCompass = data.hasCompass;
+            hasQuadrant = data.hasQuadrant;
+            hasSunCompass = data.hasSunCompass;
+            hasChipLog = data.hasChipLog;
+            lastToolScanRealTime = Time.realtimeSinceStartup;
+        }
+
         private void QueueNavigation(VirtualCrewManager manager, NavigationMethod method)
         {
             if (!manager.TryAddNavigateRequest(method, out string reason))
@@ -248,13 +307,14 @@ namespace SailwindVirtualCrew
 
         private void ScanForTools()
         {
-            bool[] found     = LocatorUtils.findItem(ToolItemNames);
+            bool[] found     = LocatorUtils.FindItemsOnCurrentVessel(ToolItemNames);
             hasChronocompass = found[0];
             hasChronometer   = found[1];
             hasCompass       = found[2];
             hasQuadrant      = found[3];
             hasSunCompass    = found[4];
             hasChipLog       = found[5];
+            lastToolScanRealTime = Time.realtimeSinceStartup;
         }
 
         private Texture2D fillTexture;

@@ -52,17 +52,9 @@ namespace SailwindVirtualCrew
             if (!showWindow) return;
             SailwindGuiStyle.Apply();
 
-            var manager = VirtualCrewManager.Instance;
-            var bails   = manager.BailRequests;
-
             float contentHeight = ButtonHeight  // water label
                                 + ButtonHeight  // bucket status
                                 + ButtonHeight; // bail button
-
-            foreach (var b in bails)
-                contentHeight += b.Status == WorkRequestStatus.InProgress
-                    ? ButtonHeight + 14f  // crewman label + bar
-                    : ButtonHeight;       // waiting label
 
             if (DeveloperMode.IsEnabled)
                 contentHeight += 4f + ButtonHeight; // dev button
@@ -79,7 +71,6 @@ namespace SailwindVirtualCrew
 
             var manager = VirtualCrewManager.Instance;
             var bd      = GetBoatDamage();
-            var bails   = manager.BailRequests;
 
             // ── Water level ─────────────────────────────────────────────────
             string waterStr = DeveloperMode.IsEnabled
@@ -101,21 +92,6 @@ namespace SailwindVirtualCrew
                 manager.AddBailRequest(new BailRequest(bd, units));
             }
             GUI.enabled = true;
-
-            // ── Active bail requests ─────────────────────────────────────────
-            foreach (var bail in bails)
-            {
-                if (bail.Status == WorkRequestStatus.InProgress)
-                {
-                    string phase = bail.IsPickingUp ? "scooping..." : "dumping...";
-                    GUILayout.Label($"  [{bail.AssignedCrewman?.Name}] {phase} ({bail.ToolName})");
-                    DrawProgressBar(bail.GetProgress());
-                }
-                else
-                {
-                    GUILayout.Label("  Waiting for deckhand...");
-                }
-            }
 
             // ── Developer controls ───────────────────────────────────────────
             if (DeveloperMode.IsEnabled)
