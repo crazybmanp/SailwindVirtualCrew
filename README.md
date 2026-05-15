@@ -30,8 +30,12 @@ Strongly inspired by:
   - Intelligence
   - Wisdom
   - Charisma
-- Rename crew members
-- Crew get tired and will need beds to sleep in.
+- Crew members can be renamed and choose from a random NPC model
+- Crew get tired and will need beds to sleep in. (on average 1 bed per 3 crew, but you may need slightly more if you work them hard)
+- Crew require 10 Al'Ankh coins per day, though if you have none they don't care (for now).
+- Each crewmember takes a share of your profits. Each deckhand, for example, will take 1% of your profit.
+  - So if you buy a barrel of spices for 100 coins, and sell it for 300 coins, a deckhand will take 2 coins (1% of 200 profit).
+  - They always take at least one coin.
 
 ### Crew Types
 
@@ -40,8 +44,10 @@ Strongly inspired by:
 - Can operate sail winches (halyards/sheets).
 - Can be commanded to bail out water
 - Can raise and lower anchors
-- You can issue commands like "lower all sails"
-- They take on the jobs, move to the winches (based on Dexterity), and operate them (based on Strength).
+- Can throw mooring lines
+- You can issue commands like "lower all sails" or "trim the jibs"
+  - Dynamic hotkeys for combinations of sail groups & commands so you can shortcut your favorites (e.g. squares->deploy, jibs-> port1/2, etc
+- They take on the jobs, move to their workstation (based on Dexterity), and operate them (based on Strength).
 - If you have a big ship, you may want to get more than one deckhand, or you'll be waiting a long time for them to finish all the jobs!
 
 
@@ -60,6 +66,7 @@ Strongly inspired by:
 - Navigators with better Intelligence take more precise measurements.
   - Special case: Intelligence 1 navigators have basically no idea where they are.
 - Can only operate most tools once per day, representing their "best effort" with it.
+- Keep a record of the last 3 measurements
 
 Tools:
 - Quadrant: Can only be used between 20:00-04:00 local time. Gets latitude.
@@ -69,7 +76,10 @@ Tools:
 
 #### Lookout
 
-- Keeps an eye out for landmasses, based on their Wisdom, and reports the rough heading to them.
+- Keeps an eye out for landmasses, and if they see one, reports the rough heading to them.
+  - Uses Wisdom to determine how small a landmass they can see
+  - Once they have a landmass in sight, they "build confidence" that it is in fact land. This speed is affected by dexterity (representing their ability to hold themselves & their tools precisely)
+  - Once confidence is high enough, they announce the landmass and report heading. They also ring a bell that will wake a sleeping player.
   - Can scan for and use spyglasses on board or in player inventory
 
 #### Quartermaster
@@ -87,12 +97,7 @@ Tools:
 
 ### Crew (General)
 
-- Crew should require wages, paid out periodically.
-  - Deckhands: 10 AA or equivalent daily? Missions pay out about 25 for a 1 day journey, and the player can start by taking 2 missions. 
-    - If the player is making about 50 coins a day, then having 1 deckhand take 20% of that seems reasonable. 
-    - With cost of food and water that's probably closer to 30% or more.
-- Crew should require food, eaten daily.
-  - Player needs about 8 units of water daily? And a barrel is about 20 coins and holds 60 units, so this also increasts costs by about 2.5 AA coins per day per crew
+- Crew should require food/water, consumed daily.
 
 ### Crew Roles
 
@@ -100,7 +105,6 @@ Tools:
 
 - Can operate bilge pumps
 - Can repair ships with Oakum
-- Throw lines to attach to port.
 
 #### Chief Officer
 
@@ -110,7 +114,7 @@ Tools:
 - Can be configured to:
   - Periodically call for the sails to be trimmed.
   - Instruct the Navigator to take their measurements at the proper times.
-  - Rotate out pilots as they become tired.
+  - Rotate out station roles as they become tired (e.g. pilots, lookouts).
 - Checks hull status and issues repairs at sea.
 - Their Charisma acts as a buff (or detriment) to the statistics of other crew members.
 
@@ -120,9 +124,7 @@ Tools:
   - Not sure how the latter would work with scrambled seas...
   - Note that a bad lat/lon might mean they make a mistake and name it incorrectly!
   - Once you get very close to an island you've been to before, they'll identify it via its shape.
-- Some way to "Announce" when land sighted when coming in from the ocean
-- Maybe some kind of proximity warning for things right in front of you?
-- Would also be interesting if they were affected by the wave height/ocean swells, just like the player.
+- Player can designate a "lookout station" like a crow's nest where they will go to work. 
 
 #### Chef
 
@@ -136,12 +138,7 @@ Tools:
 
 ### UI / UX
 
-- For now, all features are accessed via windows; long-term the goal would be to achieve the same immersion Sailwind generally aims for (character models on board)
-- Dynamic hotkeys for combinations of sail groups & commands so you can shortcut your favorites (e.g. squares->deploy, jibs-> port1/2, etc
-
-### Logic
-
-- Improve sail auto-trim for sails to find an efficient point that also has some "safe distance" from any efficiency cliff.
+- For now, most features are accessed via windows; long-term the goal would be to achieve the same immersion Sailwind generally aims for (character models on board)
 
 ---
 
@@ -152,6 +149,7 @@ Tools:
   - Chef
 - Window sizes are wrong and initial placement is poor.
 - Can see Water % even without Quartermaster
+- If your ship sinks, the code really bugs out. Don't sink your ship!
 
 ---
 
