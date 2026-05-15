@@ -31,6 +31,7 @@ namespace SailwindVirtualCrew
         public Dictionary<string, VesselSaveData> AllVesselsData { get; set; }
         public string CurrentVesselKey { get; private set; }
         public Dictionary<string, float> LookoutCertainties { get; private set; }
+        public Dictionary<string, bool> VisitedPorts { get; private set; }
 
         public List<SailGroup> SailGroups { get; private set; }
         public SailGroup AllSailsGroup { get; private set; }
@@ -74,6 +75,7 @@ namespace SailwindVirtualCrew
         {
             AllVesselsData = new Dictionary<string, VesselSaveData>();
             LookoutCertainties = new Dictionary<string, float>();
+            VisitedPorts = new Dictionary<string, bool>();
             SailGroups = new List<SailGroup>();
             Crew = new List<Crewman>();
             TotalSharePayByCurrency = new int[4];
@@ -271,6 +273,50 @@ namespace SailwindVirtualCrew
 
             if (AllVesselsData.TryGetValue(CurrentVesselKey, out var vesselData) && vesselData.customWorkstationLocations != null)
                 vesselData.customWorkstationLocations.Remove(workstationKey);
+        }
+
+        public void SetLookoutStation(Vector3 localPosition, Quaternion localRotation, bool isCrowsNest, Vector3 approachLocalPosition)
+        {
+            EnsureCurrentVesselKey();
+            if (CurrentVesselKey == null) return;
+            if (!AllVesselsData.ContainsKey(CurrentVesselKey))
+                AllVesselsData[CurrentVesselKey] = new VesselSaveData();
+
+            AllVesselsData[CurrentVesselKey].lookoutStation = new LookoutStationSaveData
+            {
+                localPosition = new[] { localPosition.x, localPosition.y, localPosition.z },
+                localEulerAngles = new[] { localRotation.eulerAngles.x, localRotation.eulerAngles.y, localRotation.eulerAngles.z },
+                isCrowsNest = isCrowsNest,
+                approachLocalPosition = new[] { approachLocalPosition.x, approachLocalPosition.y, approachLocalPosition.z }
+            };
+        }
+
+        public bool TryGetLookoutStation(out LookoutStationSaveData station)
+        {
+            station = null;
+            EnsureCurrentVesselKey();
+            if (CurrentVesselKey == null)
+                return false;
+
+            return AllVesselsData.TryGetValue(CurrentVesselKey, out var vesselData)
+                && vesselData.lookoutStation != null
+                && vesselData.lookoutStation.localPosition != null
+                && vesselData.lookoutStation.localPosition.Length >= 3
+                && vesselData.lookoutStation.localEulerAngles != null
+                && vesselData.lookoutStation.localEulerAngles.Length >= 3
+                && (!vesselData.lookoutStation.isCrowsNest
+                    || (vesselData.lookoutStation.approachLocalPosition != null
+                        && vesselData.lookoutStation.approachLocalPosition.Length >= 3))
+                && ((station = vesselData.lookoutStation) != null);
+        }
+
+        public void ClearLookoutStation()
+        {
+            EnsureCurrentVesselKey();
+            if (CurrentVesselKey == null) return;
+
+            if (AllVesselsData.TryGetValue(CurrentVesselKey, out var vesselData))
+                vesselData.lookoutStation = null;
         }
 
         public IReadOnlyList<FavoriteAction> FavoriteActions
@@ -691,6 +737,55 @@ namespace SailwindVirtualCrew
                 LookoutCertainties.Remove(key);
             else
                 LookoutCertainties[key] = certainty;
+        }
+
+        public void StoreVisitedPorts(Dictionary<string, bool> visitedPorts)
+        {
+            VisitedPorts = new Dictionary<string, bool>();
+            if (visitedPorts == null)
+                return;
+
+            foreach (var kv in visitedPorts)
+                if (!string.IsNullOrEmpty(kv.Key) && kv.Value)
+                    VisitedPorts[kv.Key] = true;
+        }
+
+        public Dictionary<string, bool> GetVisitedPortsSnapshot()
+        {
+            return new Dictionary<string, bool>(VisitedPorts ?? new Dictionary<string, bool>());
+        }
+
+        public void RegisterVisitedPort(Port port)
+        {
+            if (port == null)
+                return;
+
+            RegisterVisitedPort(port.GetPortName());
+        }
+
+        public void RegisterVisitedPort(string portName)
+        {
+            if (string.IsNullOrEmpty(portName))
+                return;
+
+            if (VisitedPorts == null)
+                VisitedPorts = new Dictionary<string, bool>();
+
+            VisitedPorts[portName] = true;
+        }
+
+        public bool HasVisitedPort(string portName)
+        {
+            if (string.IsNullOrEmpty(portName))
+                return false;
+
+            if (VisitedPorts != null
+                && VisitedPorts.TryGetValue(portName, out bool visited)
+                && visited)
+                return true;
+
+            return GameState.lastVisitedPort != null
+                && GameState.lastVisitedPort.GetPortName() == portName;
         }
 
         public void RecordCargoPurchase(ShipItem item, int price, int currency)

@@ -90,6 +90,7 @@ namespace SailwindVirtualCrew
                 GUI.enabled = true;
                 if (freshest == null)
                     GUILayout.Label("No lookout in crew.");
+                DrawLookoutStationControls(manager);
                 _resizer.HandleInWindow(ref windowRect);
                 GUI.DragWindow();
                 return;
@@ -108,6 +109,8 @@ namespace SailwindVirtualCrew
                 GUILayout.Label(_spyglassZoom > 1f
                     ? $"Spyglass: {_spyglassZoom:F1}x effective zoom"
                     : "Spyglass: none");
+
+            DrawLookoutStationControls(manager);
 
             var tracker = IslandDistanceTracker.instance;
             if (tracker == null || tracker.islands == null || tracker.islands.Count == 0)
@@ -141,7 +144,10 @@ namespace SailwindVirtualCrew
                 if (certainty >= 1f)
                 {
                     string bearing = GetBearing(playerPos, island.GetPosition());
-                    report = $"Land Sighted: {bearing}";
+                    if (LookoutIslandKnowledge.TryIdentifyIsland(island, observerPos, lookout, _spyglassZoom, out string islandName, out _))
+                        report = $"Land Sighted: {islandName} ({bearing})";
+                    else
+                        report = $"Land Sighted: {bearing}";
                     break;
                 }
             }
@@ -194,6 +200,31 @@ namespace SailwindVirtualCrew
             GUILayout.Space(2);
         }
 
+        private void DrawLookoutStationControls(VirtualCrewManager manager)
+        {
+            GUILayout.Space(4);
+            bool hasStation = manager.TryGetLookoutStation(out var station);
+            if (hasStation)
+            {
+                Vector3 local = ToVector3(station.localPosition);
+                GUILayout.Label("Station: " + (station.isCrowsNest ? "Crow's Nest" : "Deck") + "  " + Format(local));
+            }
+            else
+            {
+                GUILayout.Label("Station: none");
+            }
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Set Lookout Station Here"))
+                CrewNavigationCoordinator.Instance.SetLookoutStationAtPlayer();
+
+            GUI.enabled = hasStation;
+            if (GUILayout.Button("Clear Station"))
+                CrewNavigationCoordinator.Instance.ClearLookoutStation();
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+        }
+
         private void DrawIslandVisibilityRow(IslandHorizon island, float dist, Crewman lookout)
         {
             if (!LookoutVisibility.TryEvaluate(island, GetObservationEyePosition(lookout), lookout, _spyglassZoom, out var visibility))
@@ -207,8 +238,13 @@ namespace SailwindVirtualCrew
                 ? $"WAVE BLOCK {visibility.WaveBlockDistance:F0}m"
                 : "waves clear";
             float certainty = GetLookoutCertainty(island);
+            var idInfo = LookoutIslandKnowledge.GetIdentificationInfo(island, GetObservationEyePosition(lookout), lookout, _spyglassZoom);
+            string visitedTag = idInfo.HasVisited ? "visited" : "unvisited";
+            string identifiedTag = idInfo.Identified ? "identified" : "unidentified";
+            string clearTag = idInfo.CurrentlyVisible ? "clear" : "blocked";
             GUILayout.Label($"{GetIslandName(island)} ({dist:F0}m)  certainty:{certainty:F2}  [{(island.SceneLoaded() ? "scene" : "horizon")}]  {(certainty >= 1f ? "SIGHTED" : "")}");
             GUILayout.Label($"  drop:{visibility.CurrentDrop:F1}m  peak:{visibility.PeakAboveRoot:F0}m  angle:{visibility.AngleDeg:F2} deg  {waveTag}");
+            GUILayout.Label($"  name:{identifiedTag}  visit:{visitedTag}  current:{clearTag}  identify angle:{idInfo.EffectiveAngleDeg:F2}>{LookoutIslandKnowledge.IdentificationAngleDeg:F1} deg");
             if (visibility.WaveSampleCount > 0)
                 GUILayout.Label($"  wave scan:{visibility.WaveSampleCount} samples / {visibility.WaveSampleMaxDistance:F0}m  spacing:{visibility.WaveSampleSpacing:F1}m");
             else
@@ -339,10 +375,8 @@ namespace SailwindVirtualCrew
 
         private static string GetIslandName(IslandHorizon island)
         {
-            if (Port.ports != null)
-                foreach (Port port in Port.ports)
-                    if (port != null && island.economy != null && port.island == island.economy)
-                        return port.GetPortName();
+            if (LookoutIslandKnowledge.TryGetPortName(island, out string portName))
+                return portName;
 
             string goName = island.gameObject.name;
             if (!string.IsNullOrEmpty(goName) && goName != "Island")
@@ -476,6 +510,18 @@ namespace SailwindVirtualCrew
         private static float GetLookoutCertainty(IslandHorizon island)
         {
             return VirtualCrewManager.Instance.GetLookoutCertainty(island);
+        }
+
+        private static Vector3 ToVector3(float[] values)
+        {
+            return values != null && values.Length >= 3
+                ? new Vector3(values[0], values[1], values[2])
+                : Vector3.zero;
+        }
+
+        private static string Format(Vector3 value)
+        {
+            return "(" + value.x.ToString("0.000") + ", " + value.y.ToString("0.000") + ", " + value.z.ToString("0.000") + ")";
         }
 
         private static Vector3 GetPlayerEyePosition()

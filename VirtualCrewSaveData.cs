@@ -39,6 +39,15 @@ namespace SailwindVirtualCrew
     }
 
     [Serializable]
+    public class LookoutStationSaveData
+    {
+        public float[] localPosition;
+        public float[] localEulerAngles;
+        public bool isCrowsNest;
+        public float[] approachLocalPosition;
+    }
+
+    [Serializable]
     public class CargoPaySaveData
     {
         public int instanceId;
@@ -62,6 +71,7 @@ namespace SailwindVirtualCrew
         public List<SailGroupSaveData> sailGroups = new List<SailGroupSaveData>();
         public Dictionary<string, CrewRestLocationSaveData> crewRestLocations = new Dictionary<string, CrewRestLocationSaveData>();
         public Dictionary<string, WorkstationLocationSaveData> customWorkstationLocations = new Dictionary<string, WorkstationLocationSaveData>();
+        public LookoutStationSaveData lookoutStation;
         public List<FavoriteAction> favoriteActions = new List<FavoriteAction>();
     }
 
@@ -76,5 +86,6 @@ namespace SailwindVirtualCrew
         public int[] totalSharePayByCurrency;
         public Dictionary<int, CargoPaySaveData> cargoPayRecords;
         public Dictionary<string, float> lookoutCertainties;
+        public Dictionary<string, bool> visitedPorts;
     }
 }

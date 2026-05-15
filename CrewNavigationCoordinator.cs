@@ -26,6 +26,7 @@ namespace SailwindVirtualCrew
         private float _lastLookoutStopReal   = float.MinValue;
         private bool  _landVisibleAtLastStop;
         private const float ShiftChangeWindow = 5f;
+        private const float CrowsNestVerticalThreshold = 3f;
 
         private CrewNavigationCoordinator()
         {
@@ -77,6 +78,41 @@ namespace SailwindVirtualCrew
 
             VirtualCrewManager.Instance.ClearCustomWorkstationLocation(station.StableKey);
             RebuildWorkstations();
+        }
+
+        internal bool SetLookoutStationAtPlayer()
+        {
+            if (!EnsureRuntimeReady() || Refs.observerMirror == null)
+                return false;
+
+            Transform player = Refs.observerMirror.transform;
+            Vector3 localPosition = _context.WorldBoat.InverseTransformPoint(player.position);
+            Vector3 localForward = _context.WorldBoat.InverseTransformDirection(player.forward);
+            localForward.y = 0f;
+            if (localForward.sqrMagnitude < 0.001f)
+                localForward = Vector3.forward;
+
+            Quaternion localRotation = Quaternion.LookRotation(localForward.normalized, Vector3.up);
+            if (!_navMeshProvider.TryGetWorldOnNavMeshQuiet(localPosition, GetNavMeshSearchDistance(), out var approachWorld))
+            {
+                CrewDebugLog.Warn(Phase, "Could not project lookout station to navmesh.");
+                return false;
+            }
+
+            Vector3 approachLocal = _navMeshProvider.WorldToProxyLocal(approachWorld);
+            bool isCrowsNest = localPosition.y - approachLocal.y >= CrowsNestVerticalThreshold;
+            Vector3 stationLocal = isCrowsNest ? localPosition : approachLocal;
+            VirtualCrewManager.Instance.SetLookoutStation(stationLocal, localRotation, isCrowsNest, approachLocal);
+            CrewDebugLog.Ok(Phase,
+                "Set lookout station local=" + Format(stationLocal)
+                + " approach=" + Format(approachLocal)
+                + " crowsNest=" + isCrowsNest);
+            return true;
+        }
+
+        internal void ClearLookoutStation()
+        {
+            VirtualCrewManager.Instance.ClearLookoutStation();
         }
 
         private void RingLookoutBell()
@@ -251,6 +287,7 @@ namespace SailwindVirtualCrew
 
             Vector3 startLocal;
             Quaternion startRotation;
+            LookoutStationSaveData lookoutStation = null;
             if (!VirtualCrewManager.Instance.TryGetCrewRestLocation(task.AssignedCrewman, out startLocal, out startRotation))
             {
                 startLocal = actor.CurrentLocalPosition;
@@ -261,7 +298,14 @@ namespace SailwindVirtualCrew
                 startLocal = projectedStartLocal;
             }
 
-            if (actor.BeginLookout(task, startLocal, startRotation, _random))
+            if (VirtualCrewManager.Instance.TryGetLookoutStation(out var savedStation))
+            {
+                lookoutStation = savedStation;
+                startLocal = ToVector3(savedStation.isCrowsNest ? savedStation.approachLocalPosition : savedStation.localPosition);
+                startRotation = ToQuaternion(savedStation.localEulerAngles);
+            }
+
+            if (actor.BeginLookout(task, startLocal, startRotation, _random, lookoutStation))
             {
                 _actorsByOwner[task] = actor;
                 bool isShiftChange = (UnityEngine.Time.realtimeSinceStartup - _lastLookoutStopReal) < ShiftChangeWindow;
@@ -615,6 +659,25 @@ namespace SailwindVirtualCrew
             return 1.6f + (dexterity - 3) * 0.3f;
         }
 
+        private static Vector3 ToVector3(float[] values)
+        {
+            return values != null && values.Length >= 3
+                ? new Vector3(values[0], values[1], values[2])
+                : Vector3.zero;
+        }
+
+        private static Quaternion ToQuaternion(float[] euler)
+        {
+            return euler != null && euler.Length >= 3
+                ? Quaternion.Euler(euler[0], euler[1], euler[2])
+                : Quaternion.identity;
+        }
+
+        private static string Format(Vector3 value)
+        {
+            return "(" + value.x.ToString("0.000") + ", " + value.y.ToString("0.000") + ", " + value.z.ToString("0.000") + ")";
+        }
+
         private static string SafeName(string value)
         {
             if (string.IsNullOrEmpty(value))
@@ -643,6 +706,24 @@ namespace SailwindVirtualCrew
             private Quaternion _lookoutStartRotation;
             private System.Random _lookoutRandom;
             private float _nextLookoutDecisionTime;
+            private bool _lookoutHasStation;
+            private bool _lookoutStationIsCrowsNest;
+            private bool _lookoutAtCrowsNest;
+            private Vector3 _lookoutStationLocal;
+            private Vector3 _lookoutStationApproachLocal;
+            private Quaternion _lookoutStationRotation;
+            private float _nextLookoutStationScanTurnTime;
+            private bool _hasLookoutScanRotation;
+            private Quaternion _lookoutScanRotation;
+            private Quaternion _lookoutScanTargetRotation;
+            private bool _crowsNestAscentActive;
+            private bool _crowsNestDescentActive;
+            private Vector3 _crowsNestLerpFromLocal;
+            private Vector3 _crowsNestLerpToLocal;
+            private Quaternion _crowsNestLerpFromRotation;
+            private Quaternion _crowsNestLerpToRotation;
+            private float _crowsNestLerpStartTime;
+            private float _crowsNestLerpDuration;
             private bool _returningToRest;
             private Vector3 _restLocalPosition;
             private Vector3 _restStandLocalPosition;
@@ -747,16 +828,19 @@ namespace SailwindVirtualCrew
                 CrewDebugLog.Ok(Phase, "Teleported to role crew='" + Crew.Name + "' dest=" + destinationLocal);
             }
 
-            internal bool BeginLookout(object owner, Vector3 startLocal, Quaternion startRotation, System.Random random)
+            internal bool BeginLookout(object owner, Vector3 startLocal, Quaternion startRotation, System.Random random, LookoutStationSaveData station)
             {
                 _lookoutStartLocal = startLocal;
                 _lookoutStartRotation = startRotation;
                 _lookoutRandom = random;
+                ConfigureLookoutStation(station);
                 if (!BeginRole(owner, startLocal, startRotation, "lookout start"))
                     return false;
 
                 _lookoutActive = true;
                 _nextLookoutDecisionTime = 0f;
+                _nextLookoutStationScanTurnTime = 0f;
+                _hasLookoutScanRotation = false;
                 _lastLookoutCertaintyGameHour = GetCurrentGameHour();
                 _hasLastLookoutCertaintyGameHour = true;
                 return true;
@@ -791,6 +875,12 @@ namespace SailwindVirtualCrew
                     CrewDebugLog.Ok(Phase,
                         "Arrived crew='" + Crew.Name
                         + "' " + _activeLabel);
+                }
+
+                if (TickCrowsNestTransition())
+                {
+                    _poseSync.Tick();
+                    return;
                 }
 
                 if (_lookoutActive && ActiveOwner != null)
@@ -840,6 +930,14 @@ namespace SailwindVirtualCrew
                 _lookoutActive = false;
                 _lookoutSawLand = false;
                 _suppressNextLandDetection = false;
+                bool shouldDescendFromCrowsNest = _lookoutStationIsCrowsNest
+                    && (_lookoutAtCrowsNest || _crowsNestAscentActive)
+                    && _visualAgent != null
+                    && _visualAgent.VisualRoot;
+                if (shouldDescendFromCrowsNest)
+                    BeginCrowsNestDescent();
+                else
+                    ResetLookoutStationState();
                 _hasLastLookoutCertaintyGameHour = false;
             }
 
@@ -876,6 +974,12 @@ namespace SailwindVirtualCrew
                     _activeArrivalRotation = facing;
                     _hasActiveArrivalRotation = true;
 
+                    if (_lookoutHasStation)
+                    {
+                        ApplyStationLookRotation(facing);
+                        return;
+                    }
+
                     if (LocalHorizontalDistance(_logicAgent.CurrentLocalPosition, _lookoutStartLocal) > 0.5f
                         && (!_logicAgent.HasActiveDestination || LocalHorizontalDistance(_logicAgent.LastDestinationLocal, _lookoutStartLocal) > 0.35f))
                     {
@@ -894,12 +998,181 @@ namespace SailwindVirtualCrew
                 if (_logicAgent.HasActiveDestination)
                     return;
 
+                if (_lookoutHasStation)
+                {
+                    TickStationScanTurn();
+                    return;
+                }
+
                 if (TryGetRandomDeckLocal(out var randomLocal))
                 {
                     _workingLogged = false;
                     if (BeginRole(ActiveOwner, randomLocal, _logicAgent.CurrentLocalRotation, "lookout patrol"))
                         _lookoutActive = true;
                 }
+            }
+
+            private void ConfigureLookoutStation(LookoutStationSaveData station)
+            {
+                ResetLookoutStationState();
+                if (station == null)
+                    return;
+
+                _lookoutHasStation = true;
+                _lookoutStationIsCrowsNest = station.isCrowsNest;
+                _lookoutStationLocal = ToVector3(station.localPosition);
+                _lookoutStationApproachLocal = station.isCrowsNest
+                    ? ToVector3(station.approachLocalPosition)
+                    : _lookoutStationLocal;
+                _lookoutStationRotation = ToQuaternion(station.localEulerAngles);
+                _lookoutStartLocal = station.isCrowsNest ? _lookoutStationApproachLocal : _lookoutStationLocal;
+                _lookoutStartRotation = _lookoutStationRotation;
+                _activeArrivalRotation = _lookoutStationRotation;
+                _hasActiveArrivalRotation = true;
+            }
+
+            private void ResetLookoutStationState()
+            {
+                _lookoutHasStation = false;
+                _lookoutStationIsCrowsNest = false;
+                _lookoutAtCrowsNest = false;
+                _crowsNestAscentActive = false;
+                _crowsNestDescentActive = false;
+                _hasLookoutScanRotation = false;
+                _nextLookoutStationScanTurnTime = 0f;
+            }
+
+            private bool TickCrowsNestTransition()
+            {
+                if (_crowsNestDescentActive)
+                {
+                    UpdateCrowsNestLerp();
+                    return true;
+                }
+
+                if (!_lookoutActive || !_lookoutStationIsCrowsNest || ActiveOwner == null)
+                    return false;
+
+                if (!_lookoutAtCrowsNest && !_crowsNestAscentActive && _logicAgent.HasArrived)
+                    BeginCrowsNestAscent();
+
+                if (_crowsNestAscentActive)
+                {
+                    UpdateCrowsNestLerp();
+                    return true;
+                }
+
+                return false;
+            }
+
+            private void BeginCrowsNestAscent()
+            {
+                BeginCrowsNestLerp(
+                    GetVisualLocalPosition(),
+                    _lookoutStationLocal,
+                    _lookoutStationRotation,
+                    _lookoutStationRotation,
+                    ascending: true);
+            }
+
+            private void BeginCrowsNestDescent()
+            {
+                BeginCrowsNestLerp(
+                    GetVisualLocalPosition(),
+                    _lookoutStationApproachLocal,
+                    GetVisualLocalRotation(),
+                    _lookoutStationRotation,
+                    ascending: false);
+            }
+
+            private void BeginCrowsNestLerp(Vector3 fromLocal, Vector3 toLocal, Quaternion fromRotation, Quaternion toRotation, bool ascending)
+            {
+                _logicAgent.Stop();
+                _crowsNestLerpFromLocal = fromLocal;
+                _crowsNestLerpToLocal = toLocal;
+                _crowsNestLerpFromRotation = fromRotation;
+                _crowsNestLerpToRotation = toRotation;
+                _crowsNestLerpStartTime = Time.time;
+                _crowsNestLerpDuration = Mathf.Max(0.1f, Vector3.Distance(fromLocal, toLocal) / GetCrowsNestClimbSpeed());
+                _crowsNestAscentActive = ascending;
+                _crowsNestDescentActive = !ascending;
+            }
+
+            private void UpdateCrowsNestLerp()
+            {
+                float t = Mathf.Clamp01((Time.time - _crowsNestLerpStartTime) / _crowsNestLerpDuration);
+                t = t * t * (3f - 2f * t);
+                Vector3 localPosition = Vector3.Lerp(_crowsNestLerpFromLocal, _crowsNestLerpToLocal, t);
+                Quaternion localRotation = Quaternion.Slerp(_crowsNestLerpFromRotation, _crowsNestLerpToRotation, t);
+                _poseSync.SetPoseOverride(localPosition, localRotation);
+
+                if (t < 1f)
+                    return;
+
+                if (_crowsNestAscentActive)
+                {
+                    _lookoutAtCrowsNest = true;
+                    _hasLookoutScanRotation = false;
+                }
+                else
+                {
+                    _lookoutAtCrowsNest = false;
+                    _poseSync.ClearPoseOverride();
+                    _poseSync.ClearRotationOverride();
+                }
+
+                _crowsNestAscentActive = false;
+                _crowsNestDescentActive = false;
+            }
+
+            private void TickStationScanTurn()
+            {
+                if (!_hasLookoutScanRotation)
+                {
+                    _lookoutScanRotation = GetVisualLocalRotation();
+                    _lookoutScanTargetRotation = _lookoutScanRotation;
+                    _hasLookoutScanRotation = true;
+                }
+
+                if (Time.time >= _nextLookoutStationScanTurnTime)
+                {
+                    _nextLookoutStationScanTurnTime = Time.time + 10f;
+                    float yaw = (float)_lookoutRandom.NextDouble() * 360f;
+                    _lookoutScanTargetRotation = Quaternion.Euler(0f, yaw, 0f);
+                }
+
+                _lookoutScanRotation = Quaternion.Slerp(_lookoutScanRotation, _lookoutScanTargetRotation, Time.deltaTime * 1.5f);
+                ApplyStationLookRotation(_lookoutScanRotation);
+            }
+
+            private void ApplyStationLookRotation(Quaternion localRotation)
+            {
+                _activeArrivalRotation = localRotation;
+                _hasActiveArrivalRotation = true;
+
+                if (_lookoutStationIsCrowsNest && _lookoutAtCrowsNest)
+                    _poseSync.SetPoseOverride(_lookoutStationLocal, localRotation);
+                else
+                    _poseSync.SetRotationOverride(localRotation);
+            }
+
+            private Vector3 GetVisualLocalPosition()
+            {
+                return _visualAgent != null && _visualAgent.VisualRoot
+                    ? _visualAgent.VisualRoot.transform.localPosition
+                    : _logicAgent.CurrentLocalPosition;
+            }
+
+            private Quaternion GetVisualLocalRotation()
+            {
+                return _visualAgent != null && _visualAgent.VisualRoot
+                    ? _visualAgent.VisualRoot.transform.localRotation
+                    : _logicAgent.CurrentLocalRotation;
+            }
+
+            private float GetCrowsNestClimbSpeed()
+            {
+                return Mathf.Max(0.8f, DexterityToSpeed(Crew.Dexterity) * 0.65f);
             }
 
             private bool TryGetVisibleLand(out Vector3 islandPosition)
