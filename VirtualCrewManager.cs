@@ -1216,7 +1216,8 @@ namespace SailwindVirtualCrew
         // deckhands and marks completed tasks as done.
         public void Tick()
         {
-            // Drain stamina at 1 unit per in-game minute (2 units/min while working).
+            // Drain stamina at 1 unit per in-game minute. Optional config restores the old
+            // behavior where actively working crew drain twice as fast.
             // Sleeping crew are exempt from drain — their stamina is handled by SleepRequest.Tick().
             float currentTime = Sun.sun.globalTime;
             float deltaMinutes = 0f;
@@ -1228,7 +1229,12 @@ namespace SailwindVirtualCrew
                 foreach (var c in Crew)
                 {
                     if (c.CurrentTask is SleepRequest) continue;
-                    c.DrainStamina(c.IsOccupied ? deltaMinutes * 2f : deltaMinutes);
+                    float drain = deltaMinutes;
+                    if (Plugin.ExtraWorkingStaminaDrain != null
+                        && Plugin.ExtraWorkingStaminaDrain.Value
+                        && c.IsOccupied)
+                        drain *= 2f;
+                    c.DrainStamina(drain);
                 }
             }
             _lastGlobalTime = currentTime;

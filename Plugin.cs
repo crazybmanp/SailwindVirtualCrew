@@ -21,6 +21,7 @@ namespace SailwindVirtualCrew
         //--settings--
         internal static ConfigEntry<bool> exampleSetting;
         internal static ConfigEntry<KeyboardShortcut> ToggleCrewWindow;
+        internal static ConfigEntry<bool> ExtraWorkingStaminaDrain;
 
         // PID slider ranges
         internal static ConfigEntry<float> PidMaxP;
@@ -46,6 +47,11 @@ namespace SailwindVirtualCrew
             PidMaxP = Config.Bind("Autopilot", "PidMaxP", 0.25f, "Maximum value for the P (proportional) slider.");
             PidMaxI = Config.Bind("Autopilot", "PidMaxI", 0.25f, "Maximum value for the I (integral) slider.");
             PidMaxD = Config.Bind("Autopilot", "PidMaxD", 0.25f, "Maximum value for the D (derivative) slider.");
+            ExtraWorkingStaminaDrain = Config.Bind(
+                "Crew",
+                "ExtraWorkingStaminaDrain",
+                false,
+                "When enabled, crew assigned to active tasks lose stamina twice as fast. When disabled, working and idle crew use the same baseline stamina drain.");
 
             ToggleCrewWindow = Config.Bind("CrewHotkeys", "ToggleCrewWindow", new KeyboardShortcut(KeyCode.B));
             BuildShipMap = Config.Bind("CrewHotkeys", "BuildShipMap", new KeyboardShortcut(KeyCode.V));

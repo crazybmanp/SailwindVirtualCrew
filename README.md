@@ -105,6 +105,7 @@ Tools:
 
 - Can operate bilge pumps
 - Can repair ships with Oakum
+- Add "harden/ease" buttons to dual-sheet sails (Squares, jibs) for fine adjustment
 
 #### Chief Officer
 
