@@ -20,14 +20,18 @@ namespace SailwindVirtualCrew
         public float[] GetPosition() => new[] { windowRect.x, windowRect.y, _resizer.UserHeight };
         public void SetPosition(float x, float y, float userHeight) { windowRect.x = x; windowRect.y = y; _resizer.UserHeight = userHeight; }
 
-        private void Update()
+        public bool IsVisible => showWindow;
+
+        public void ToggleWindow()
         {
-            if (Plugin.ToggleCrewWindow.Value.IsDown())
-            {
-                showWindow = !showWindow;
-                if (!showWindow)
-                    ClearMarker();
-            }
+            SetVisible(!showWindow);
+        }
+
+        public void SetVisible(bool visible)
+        {
+            showWindow = visible;
+            if (!showWindow)
+                ClearMarker();
         }
 
         private void OnDestroy()

@@ -18,10 +18,16 @@ namespace SailwindVirtualCrew
         private const float ButtonHeight      = 28f;
         private const float BaseContentHeight = 300f;
 
-        private void Update()
+        public bool IsVisible => showWindow;
+
+        public void ToggleWindow()
         {
-            if (Plugin.ToggleCrewWindow.Value.IsDown())
-                showWindow = !showWindow;
+            showWindow = !showWindow;
+        }
+
+        public void SetVisible(bool visible)
+        {
+            showWindow = visible;
         }
 
         private void OnGUI()

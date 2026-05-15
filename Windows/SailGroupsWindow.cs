@@ -11,6 +11,7 @@ namespace SailwindVirtualCrew
         private static readonly int windowId = "VirtualCrewSailGroupsWindow".GetHashCode();
 
         private WindowResizer _resizer;
+        private SailGroupMembersWindow _membersWindow;
 
         public string WindowKey => "SailGroupsWindow";
         public float[] GetPosition() => new[] { windowRect.x, windowRect.y, _resizer.UserHeight };
@@ -47,7 +48,7 @@ namespace SailwindVirtualCrew
             }
 
             // Height accounting
-            float contentHeight = ButtonHeight * 3; // favorite action controls + header row
+            float contentHeight = ButtonHeight * 4; // favorite action controls + members toggle + header row
             contentHeight += manager.SailGroups.Count * ButtonHeight;
             if (selectedGroup != null)
             {
@@ -79,6 +80,11 @@ namespace SailwindVirtualCrew
                 _creatingFavoriteAction = !_creatingFavoriteAction;
             if (_creatingFavoriteAction)
                 GUILayout.Label("Select a group, then click an action.");
+
+            var membersWindow = GetMembersWindow();
+            if (membersWindow != null
+                && GUILayout.Button(membersWindow.IsVisible ? "Hide Group Members" : "Show Group Members"))
+                membersWindow.ToggleWindow();
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Groups (click to select)", GUILayout.ExpandWidth(false));
@@ -354,6 +360,13 @@ namespace SailwindVirtualCrew
                     }
                 }
             }
+        }
+
+        private SailGroupMembersWindow GetMembersWindow()
+        {
+            if (_membersWindow == null)
+                _membersWindow = GetComponent<SailGroupMembersWindow>();
+            return _membersWindow;
         }
     }
 }

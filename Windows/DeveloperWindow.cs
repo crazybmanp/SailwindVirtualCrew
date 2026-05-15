@@ -9,6 +9,7 @@ namespace SailwindVirtualCrew
         private static readonly int windowId = "VirtualCrewDeveloperWindow".GetHashCode();
 
         private WindowResizer _resizer;
+        private WorkstationCustomizerWindow _workstationCustomizerWindow;
 
         public string WindowKey => "DeveloperWindow";
         public float[] GetPosition() => new[] { windowRect.x, windowRect.y, _resizer.UserHeight };
@@ -27,7 +28,7 @@ namespace SailwindVirtualCrew
 
             float height = 100f + 30f; // title bar + activate button
             if (DeveloperMode.IsEnabled)
-                height += 30f * 4; // add basic crew + refresh ports + drain/restore stamina buttons
+                height += 30f * 5; // add basic crew + refresh ports + stamina buttons + workstation customizer
 
             windowRect.height = _resizer.UserHeight > 0f ? _resizer.UserHeight : height;
             windowRect = GUI.Window(windowId, windowRect, DrawWindow, "Developer Tools");
@@ -55,6 +56,11 @@ namespace SailwindVirtualCrew
                 if (GUILayout.Button("Restore 60 Stamina (All Crew)"))
                     foreach (var c in VirtualCrewManager.Instance.Crew)
                         c.RestoreStamina(60f);
+
+                var workstationCustomizer = GetWorkstationCustomizerWindow();
+                if (workstationCustomizer != null
+                    && GUILayout.Button(workstationCustomizer.IsVisible ? "Hide Workstation Customizer" : "Show Workstation Customizer"))
+                    workstationCustomizer.ToggleWindow();
             }
 
             _resizer.HandleInWindow(ref windowRect);
@@ -74,6 +80,13 @@ namespace SailwindVirtualCrew
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Lookout));
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Quartermaster));
             mgr.Crew.Add(mgr.CreateRandomCrewman(ShipRole.Supercargo));
+        }
+
+        private WorkstationCustomizerWindow GetWorkstationCustomizerWindow()
+        {
+            if (_workstationCustomizerWindow == null)
+                _workstationCustomizerWindow = GetComponent<WorkstationCustomizerWindow>();
+            return _workstationCustomizerWindow;
         }
     }
 }
