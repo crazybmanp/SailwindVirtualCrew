@@ -311,13 +311,15 @@ namespace SailwindVirtualCrew
             }
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Set Lookout Station Here"))
+            if (hasStation)
+            {
+                if (GUILayout.Button("Clear Lookout Station"))
+                    CrewNavigationCoordinator.Instance.ClearLookoutStation();
+            }
+            else if (GUILayout.Button("Set Lookout Station Here"))
+            {
                 CrewNavigationCoordinator.Instance.SetLookoutStationAtPlayer();
-
-            GUI.enabled = hasStation;
-            if (GUILayout.Button("Clear Station"))
-                CrewNavigationCoordinator.Instance.ClearLookoutStation();
-            GUI.enabled = true;
+            }
             GUILayout.EndHorizontal();
         }
 

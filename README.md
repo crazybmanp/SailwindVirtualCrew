@@ -125,7 +125,7 @@ Tools:
   - Not sure how the latter would work with scrambled seas...
   - Note that a bad lat/lon might mean they make a mistake and name it incorrectly!
   - Once you get very close to an island you've been to before, they'll identify it via its shape.
-- Player can designate a "lookout station" like a crow's nest where they will go to work. 
+- Should get a bonus to finding/identifying locations that are very close
 
 #### Chef
 
