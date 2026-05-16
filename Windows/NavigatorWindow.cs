@@ -160,7 +160,7 @@ namespace SailwindVirtualCrew
                 GUILayout.Label($"Dexterity: {navigator.AdvDexterity}   Intelligence: {navigator.AdvIntelligence}");
 
             if (ShouldShowLocalTime(manager, navigator))
-                GUILayout.Label($"Local Time: {FormatLocalTime10Minute()}");
+                GUILayout.Label($"Local Time: {FormatLocalTimeMinute()}");
 
             // ── Tool search ─────────────────────────────────────────────────
             if (GUILayout.Button("Search for Tools"))
@@ -255,9 +255,9 @@ namespace SailwindVirtualCrew
             return manager.IsCrewAvailable(navigator) && hasChronometer;
         }
 
-        private static string FormatLocalTime10Minute()
+        private static string FormatLocalTimeMinute()
         {
-            int totalMinutes = Mathf.RoundToInt(Sun.sun.localTime * 60f / 10f) * 10;
+            int totalMinutes = Mathf.RoundToInt(Sun.sun.localTime * 60f);
             totalMinutes %= 24 * 60;
             if (totalMinutes < 0)
                 totalMinutes += 24 * 60;

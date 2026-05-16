@@ -48,8 +48,20 @@ namespace SailwindVirtualCrew
             bool preciseTime = hasPreciseTime
                             || method == NavigationMethod.Chronometer
                             || method == NavigationMethod.Chronocompass;
-            string timeStr  = preciseTime ? $"H{(int)localTime}" : GetTimePeriod(localTime);
+            string timeStr  = preciseTime ? FormatPreciseTime(localTime) : GetTimePeriod(localTime);
             return $"D{day} {timeStr} {GetDeviceLabel(method)}";
+        }
+
+        private static string FormatPreciseTime(float localTime)
+        {
+            int totalMinutes = (int)Math.Round(localTime * 60f);
+            totalMinutes %= 24 * 60;
+            if (totalMinutes < 0)
+                totalMinutes += 24 * 60;
+
+            int hour = totalMinutes / 60;
+            int minute = totalMinutes % 60;
+            return $"H{hour:00}:{minute:00}";
         }
 
         private static string GetTimePeriod(float localTime)

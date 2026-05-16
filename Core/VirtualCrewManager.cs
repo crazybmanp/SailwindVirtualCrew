@@ -1755,6 +1755,30 @@ namespace SailwindVirtualCrew
                 || HasNavigationTool(NavigationMethod.Chronocompass);
         }
 
+        private static int GetCurrentLocalDay()
+        {
+            if (Sun.sun == null)
+                return GameState.day;
+
+            float global = NormalizeHour(Sun.sun.globalTime);
+            float local = NormalizeHour(Sun.sun.localTime);
+            float delta = local - global;
+
+            if (delta < -12f)
+                return GameState.day + 1;
+            if (delta > 12f)
+                return GameState.day - 1;
+
+            return GameState.day;
+        }
+
+        private static float GetCurrentLocalHour()
+        {
+            return Sun.sun != null
+                ? NormalizeHour(Sun.sun.localTime)
+                : 0f;
+        }
+
         // Called once per second from Plugin.Update(). Assigns open requests to free
         // deckhands and marks completed tasks as done.
         public void Tick()
@@ -1975,7 +1999,7 @@ namespace SailwindVirtualCrew
 
                             var result = new NavigationResult(
                                 nav.Method,
-                                GameState.day, Sun.sun.localTime,
+                                GetCurrentLocalDay(), GetCurrentLocalHour(),
                                 nav.CanEstimateLatitude,  trueLat + (nav.CanEstimateLatitude  ? latErr : 0f),
                                 nav.CanEstimateLongitude, trueLon + (nav.CanEstimateLongitude ? lonErr : 0f),
                                 HasNavigationTimekeepingDevice());
