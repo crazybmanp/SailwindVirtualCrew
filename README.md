@@ -151,6 +151,7 @@ Tools:
 - Window sizes are wrong and initial placement is poor.
 - Can see Water % even without Quartermaster
 - If your ship sinks, the code really bugs out. Don't sink your ship!
+- Mooring range is too large.
 
 ---
 

@@ -19,6 +19,12 @@ namespace SailwindVirtualCrew
         private float positioningTimeTotal;
         private float workStartTime;
         private float workDuration;
+        private bool cancelled;
+        private bool throwStarted;
+        private bool throwComplete;
+        private bool throwSucceeded;
+        private float throwStartTime;
+        private float throwDuration;
 
         public MooringRequest(MooringSide side, PickupableBoatMooringRope targetRope)
         {
@@ -49,6 +55,7 @@ namespace SailwindVirtualCrew
 
         public void BeginPositioning(Crewman crewman)
         {
+            cancelled = false;
             AssignedCrewman = crewman;
             crewman.CurrentTask = this;
             if (!RefreshTarget())
@@ -115,6 +122,11 @@ namespace SailwindVirtualCrew
             Status = WorkRequestStatus.InProgress;
             workStartTime = Time.time;
             workDuration = Mathf.Max(1.5f, 5.5f - AssignedCrewman.Dexterity * 0.55f);
+            throwStarted = false;
+            throwComplete = false;
+            throwSucceeded = false;
+            throwStartTime = 0f;
+            throwDuration = 0f;
         }
 
         public void Tick()
@@ -125,33 +137,75 @@ namespace SailwindVirtualCrew
             if (Time.time < workStartTime + workDuration)
                 return;
 
-            bool moored = false;
+            if (!throwStarted)
+                BeginThrow();
+
+            if (!throwComplete)
+                return;
+
+            CrewDebugLog.Ok("Mooring",
+                "Completed " + CommandName
+                + " crew='" + (AssignedCrewman != null ? AssignedCrewman.Name : "none")
+                + "' moored=" + throwSucceeded);
+            Complete();
+        }
+
+        private void BeginThrow()
+        {
+            throwStarted = true;
+            throwComplete = true;
+            throwSucceeded = false;
+
+            if (cancelled)
+                return;
+
             if (RefreshTarget() && MooringLocator.TryFindClosestDock(TargetRope, Side, out var dock))
             {
                 var dockButton = dock.Mooring;
                 if (dockButton && dockButton.spring != null && dockButton.spring.connectedBody == null)
                 {
-                    TargetRope.MoorTo(dockButton);
-                    moored = true;
+                    throwComplete = false;
+                    throwStartTime = Time.time;
+                    throwDuration = MooringRopeThrowAnimator.EstimateDuration(
+                        TargetRope.transform.position,
+                        dockButton.transform.position);
+
+                    CrewDebugLog.Info("Mooring",
+                        "Throwing " + CommandName
+                        + " to '" + dockButton.name + "'"
+                        + " duration=" + throwDuration.ToString("0.00") + "s");
+
+                    MooringRopeThrowAnimator.ThrowTo(
+                        TargetRope,
+                        dockButton,
+                        () => cancelled,
+                        moored =>
+                        {
+                            throwSucceeded = moored;
+                            throwComplete = true;
+                        });
                 }
             }
-
-            CrewDebugLog.Ok("Mooring",
-                "Completed " + CommandName
-                + " crew='" + (AssignedCrewman != null ? AssignedCrewman.Name : "none")
-                + "' moored=" + moored);
-            Complete();
         }
 
         public float GetProgress()
         {
+            if (throwStarted && !throwComplete)
+            {
+                float throwProgress = throwDuration <= 0f
+                    ? 1f
+                    : Mathf.Clamp01((Time.time - throwStartTime) / throwDuration);
+                return 85f + throwProgress * 15f;
+            }
+
             return workDuration <= 0f
                 ? 100f
-                : Mathf.Clamp01((Time.time - workStartTime) / workDuration) * 100f;
+                : Mathf.Clamp01((Time.time - workStartTime) / workDuration) * 85f;
         }
 
         public void CancelPositioning()
         {
+            cancelled = true;
             if (!concretePositioning)
                 return;
 

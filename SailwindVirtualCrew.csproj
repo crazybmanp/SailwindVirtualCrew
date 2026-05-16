@@ -118,6 +118,7 @@
     <Compile Include="Debug\CrewDebugObjects.cs" />
     <Compile Include="Mooring\MooringDebugVisualizer.cs" />
     <Compile Include="Mooring\MooringLocator.cs" />
+    <Compile Include="Mooring\MooringRopeThrowAnimator.cs" />
     <Compile Include="Requests\BailRequest.cs" />
     <Compile Include="Requests\LookoutTask.cs" />
     <Compile Include="Requests\MooringRequest.cs" />
