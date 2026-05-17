@@ -14,3 +14,5 @@ In general, additions to this mod should follow these principles:
 	- A current example is that crew don't get extra tired when working, as it would require a huge crew for small vessels. But for people running megaships and who want three shifts, they can toggle it on.
 - The Player is the Best
   - The player sets the standard for what the crew can do. Nobody should be able to operate winches quicker, run faster, see further, etc... than the player.
+
+For any changes, fork this repository and submit a PR. Test against vanilla ships in-game. (Even if you're making a mod-only change, do a sanity check on 1-2 vanilla vessels)
