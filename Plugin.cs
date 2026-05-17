@@ -324,6 +324,10 @@ namespace SailwindVirtualCrew
                                 if (w.rope == primaryConnections.angleControllerRight) starbSheetWinch = w;
                             }
                         }
+                        else
+                        {
+                            Console.WriteLine($"WARNING: Primary square {primarySail.name} found for {deferredSquareSail.name}, but primary square has no sheets in angleWinchesBySail!");
+                        }
 
 			            DualSheetSail dual = new DualSheetSail(deferredSquareSail, halyardWinch, portSheetWinch, starbSheetWinch, DualSheetSail.DualSheetSailSubtype.Square, mast.name);
 			            VirtualCrewManager.Instance.addSquareSail(dual);
@@ -349,15 +353,15 @@ namespace SailwindVirtualCrew
 
             HingeJoint current = mirror.sailBelow;
             int safety = 0;
-            while (current != null && safety < 20)
+            while (current != null)
             {
+                if (++safety >= 20) { Console.WriteLine($"WARNING: Exceeded maximum allowed sail stack depth (20) while searching for primary square for '{topsail.name}'. Stack may be circular or too deep."); return null; }
                 var nextMirror = current.GetComponent<SquareTopsailAngleMirror>();
                 if (nextMirror == null || nextMirror.sailBelow == null)
                 {
                     return current.GetComponent<Sail>();
                 }
                 current = nextMirror.sailBelow;
-                safety++;
             }
             return null;
         }

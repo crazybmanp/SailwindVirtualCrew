@@ -2302,30 +2302,60 @@ namespace SailwindVirtualCrew
             {
                 if (sail.getHalyardWinch() != null)
                     winchInstructions.Add(sail.getHalyardWinch(), sail.halyardWinchPower);
+                else if (sail.halyardWinchPower != 0)
+                    Console.WriteLine($"WARNING: Null halyard winch for Simple sail {sail.getSailName()} despite non-zero power instruction.");
+
                 if (sail.getSheetWinch() != null)
                     winchInstructions.Add(sail.getSheetWinch(), sail.sheetWinchPower);
+                else if (sail.sheetWinchPower != 0)
+                    Console.WriteLine($"WARNING: Null sheet winch for Simple sail {sail.getSailName()} despite non-zero power instruction.");
             }
 
             foreach (DualSheetSail sail in dualSheetSails)
             {
                 if (sail.getHalyardWinch() != null)
                     winchInstructions.Add(sail.getHalyardWinch(), sail.halyardWinchPower);
+                else if (sail.halyardWinchPower != 0)
+                    Console.WriteLine($"WARNING: Null halyard winch for DualSheet sail {sail.getSailName()} despite non-zero power instruction.");
+
                 if (sail.getPortSheetWinch() != null)
                     winchInstructions.Add(sail.getPortSheetWinch(), sail.portSheetWinchPower);
+                else if (sail.portSheetWinchPower != 0)
+                    Console.WriteLine($"WARNING: Null port sheet winch for DualSheet sail {sail.getSailName()} despite non-zero power instruction.");
+
                 if (sail.getStarboardSheetWinch() != null)
                     winchInstructions.Add(sail.getStarboardSheetWinch(), sail.starboardSheetWinchPower);
+                else if (sail.starboardSheetWinchPower != 0)
+                    Console.WriteLine($"WARNING: Null starboard sheet winch for DualSheet sail {sail.getSailName()} despite non-zero power instruction.");
             }
 
             foreach (DualSheetSail sail in squareSails)
             {
                 if (sail.getHalyardWinch() != null)
                     winchInstructions.Add(sail.getHalyardWinch(), sail.halyardWinchPower);
+                else if (sail.halyardWinchPower != 0)
+                    Console.WriteLine($"WARNING: Null halyard winch for Square sail {sail.getSailName()} despite non-zero power instruction.");
 
                 // Ganged square sails share sheet winches — avoid duplicating instructions.
-                if (sail.getPortSheetWinch() != null && !winchInstructions.ContainsKey(sail.getPortSheetWinch()))
-                    winchInstructions.Add(sail.getPortSheetWinch(), sail.portSheetWinchPower);
-                if (sail.getStarboardSheetWinch() != null && !winchInstructions.ContainsKey(sail.getStarboardSheetWinch()))
-                    winchInstructions.Add(sail.getStarboardSheetWinch(), sail.starboardSheetWinchPower);
+                if (sail.getPortSheetWinch() != null)
+                {
+                    if (!winchInstructions.ContainsKey(sail.getPortSheetWinch()))
+                        winchInstructions.Add(sail.getPortSheetWinch(), sail.portSheetWinchPower);
+                }
+                else if (sail.portSheetWinchPower != 0)
+                {
+                    Console.WriteLine($"WARNING: Null port sheet winch for Square sail {sail.getSailName()} despite non-zero power instruction.");
+                }
+
+                if (sail.getStarboardSheetWinch() != null)
+                {
+                    if (!winchInstructions.ContainsKey(sail.getStarboardSheetWinch()))
+                        winchInstructions.Add(sail.getStarboardSheetWinch(), sail.starboardSheetWinchPower);
+                }
+                else if (sail.starboardSheetWinchPower != 0)
+                {
+                    Console.WriteLine($"WARNING: Null starboard sheet winch for Square sail {sail.getSailName()} despite non-zero power instruction.");
+                }
             }
         }
     }
