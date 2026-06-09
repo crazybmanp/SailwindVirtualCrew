@@ -11,7 +11,9 @@ namespace SailwindVirtualCrew
                                             Action<string, float> onHalyard,
                                             Action<string, float> onSimpleSheet,
                                             Action<string, DualSheetSail.DualSheetSailSubtype, float, float> onDualSheet,
-                                            Action onTrim)
+                                            Action onTrim,
+                                            Action onSecure = null,
+                                            Action onTrimSet = null)
         {
             var caps = group.GetCommonCapabilities(manager.AllSails);
             if (caps == SailCapability.None)
@@ -74,11 +76,28 @@ namespace SailwindVirtualCrew
                 GUILayout.EndHorizontal();
             }
 
-            if (includeTrim && caps.HasFlag(SailCapability.Trim) && onTrim != null)
+            if (includeTrim && caps.HasFlag(SailCapability.Trim))
             {
-                GUILayout.BeginHorizontal();
-                DrawButton("Trim", onTrim);
-                GUILayout.EndHorizontal();
+                if (onSecure != null)
+                {
+                    GUILayout.BeginHorizontal();
+                    DrawButton("Secure", onSecure);
+                    GUILayout.EndHorizontal();
+                }
+
+                if (onTrim != null)
+                {
+                    GUILayout.BeginHorizontal();
+                    DrawButton("Trim", onTrim);
+                    GUILayout.EndHorizontal();
+                }
+
+                if (onTrimSet != null)
+                {
+                    GUILayout.BeginHorizontal();
+                    DrawButton("Trim Set", onTrimSet);
+                    GUILayout.EndHorizontal();
+                }
             }
 
             return caps;

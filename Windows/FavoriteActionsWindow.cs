@@ -198,36 +198,44 @@ namespace SailwindVirtualCrew
 
         private string GetFavoriteGroupSummary(VirtualCrewManager mgr, SailGroup group)
         {
-            if (!mgr.TryGetFavoriteActionTargets(_selectedAction, group, out StandingOrderTargets targets))
+            if (_selectedAction == null || _selectedAction.commands == null)
+                return "";
+            
+            var cmd = _selectedAction.commands.FirstOrDefault(c => c.groupId == group.Id);
+            if (cmd == null)
                 return "";
 
             var parts = new List<string>();
-            if (targets.HasHalyard)
-                parts.Add("[H:" + FormatHalyardTarget(targets.Halyard) + "]");
+            if (cmd.hasHalyard)
+                parts.Add("[H:" + FormatHalyardTarget(cmd.halyard) + "]");
 
-            string sheet = GetSheetLabel(group, targets);
+            string sheet = GetSheetLabel(cmd);
             if (!string.IsNullOrEmpty(sheet))
                 parts.Add("[S:" + sheet + "]");
-            if (targets.HasTrim)
+            if (cmd.secure)
+                parts.Add("[Secure]");
+            if (cmd.trim)
                 parts.Add("[T:Trim]");
+            if (cmd.trimSet)
+                parts.Add("[T:Trim Set]");
 
             return parts.Count == 0 ? "" : " " + string.Join(" ", parts.ToArray());
         }
 
-        private static string GetSheetLabel(SailGroup group, StandingOrderTargets targets)
+        private static string GetSheetLabel(FavoriteActionGroupCommand cmd)
         {
-            bool hasSimple = targets.HasSimpleSheet;
-            bool hasDual = targets.HasPortSheet || targets.HasStarboardSheet;
+            bool hasSimple = cmd.hasSimpleSheet;
+            bool hasDual = cmd.hasPortSheet || cmd.hasStarboardSheet;
             if (hasSimple && hasDual)
                 return "Mixed";
             if (hasSimple)
-                return FormatSimpleSheetTarget(targets.SimpleSheet);
+                return FormatSimpleSheetTarget(cmd.simpleSheet);
             if (!hasDual)
                 return null;
-            if (!targets.HasPortSheet || !targets.HasStarboardSheet)
+            if (!cmd.hasPortSheet || !cmd.hasStarboardSheet)
                 return "Mixed";
 
-            return "P" + FormatPercent(targets.PortSheet) + "/S" + FormatPercent(targets.StarboardSheet);
+            return "P" + FormatPercent(cmd.portSheet) + "/S" + FormatPercent(cmd.starboardSheet);
         }
 
         private void DrawGroupCommandEditor(VirtualCrewManager mgr)
@@ -247,7 +255,9 @@ namespace SailwindVirtualCrew
                 onSimpleSheet: (label, target) => mgr.SetFavoriteActionSimpleSheet(_selectedAction, _selectedGroup, target),
                 onDualSheet: (label, subtype, portTarget, starboardTarget) =>
                     mgr.SetFavoriteActionDualSheet(_selectedAction, _selectedGroup, portTarget, starboardTarget),
-                onTrim: () => mgr.SetFavoriteActionTrim(_selectedAction, _selectedGroup));
+                onTrim: () => mgr.SetFavoriteActionTrim(_selectedAction, _selectedGroup),
+                onSecure: () => mgr.SetFavoriteActionSecure(_selectedAction, _selectedGroup),
+                onTrimSet: () => mgr.SetFavoriteActionTrimSet(_selectedAction, _selectedGroup));
 
             GUILayout.Space(4);
             if (GUILayout.Button("Clear this group from favorite"))

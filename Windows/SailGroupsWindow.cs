@@ -181,6 +181,8 @@ namespace SailwindVirtualCrew
                 GUILayout.BeginHorizontal();
                 DrawGroupRelativeSheetButton(manager, "Harden Up", group, allSails, -0.10f);
                 DrawGroupRelativeSheetButton(manager, "Ease Out",  group, allSails,  0.10f);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
                 DrawGroupTrimButton(manager, group, allSails);
                 GUILayout.EndHorizontal();
             }
@@ -305,20 +307,19 @@ namespace SailwindVirtualCrew
         private void DrawGroupTrimButton(VirtualCrewManager manager,
                                          SailGroup group, IReadOnlyList<ICommonSailActions> allSails)
         {
-            if (GUILayout.Button("Trim"))
+            if (GUILayout.Button("Secure", GUILayout.Width(100)))
             {
-                foreach (var sail in group.GetMembers(allSails))
-                {
-                    if (sail is SimpleSail simple)
-                        manager.AddTrimRequest(new TrimRequest(simple));
-                    else if (sail is DualSheetSail dual)
-                    {
-                        if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Jib)
-                            manager.AddJibTrimRequest(new JibTrimRequest(dual));
-                        else if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Square)
-                            manager.AddSquareTrimRequest(new SquareTrimRequest(dual));
-                    }
-                }
+                manager.QueueSecureSails(group.GetMembers(allSails));
+            }
+
+            if (GUILayout.Button("Trim", GUILayout.ExpandWidth(true)))
+            {
+                manager.QueueTrimSails(group.GetMembers(allSails), skipReefed: false);
+            }
+
+            if (GUILayout.Button("Trim Set", GUILayout.Width(100)))
+            {
+                manager.QueueTrimSails(group.GetMembers(allSails), skipReefed: true);
             }
         }
 

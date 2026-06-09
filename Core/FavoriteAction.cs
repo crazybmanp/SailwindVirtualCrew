@@ -10,7 +10,9 @@ namespace SailwindVirtualCrew
         SimpleSheet,
         RelativeSheet,
         DualSheet,
-        Trim
+        Trim,
+        TrimSet,
+        Secure
     }
 
     public enum FavoriteShipAction
@@ -35,6 +37,8 @@ namespace SailwindVirtualCrew
         public bool hasStarboardSheet;
         public float starboardSheet;
         public bool trim;
+        public bool secure;
+        public bool trimSet;
     }
 
     [Serializable]
@@ -88,6 +92,8 @@ namespace SailwindVirtualCrew
                     case FavoriteActionKind.RelativeSheet: return "Sheet: " + label;
                     case FavoriteActionKind.DualSheet:     return "Sheet: " + label;
                     case FavoriteActionKind.Trim:          return "Trim";
+                    case FavoriteActionKind.TrimSet:       return "Trim Set";
+                    case FavoriteActionKind.Secure:        return "Secure";
                     default:                               return label ?? "Action";
                 }
             }
@@ -122,6 +128,12 @@ namespace SailwindVirtualCrew
 
         public static FavoriteAction Trim(SailGroup group) =>
             Create(group, FavoriteActionKind.Trim, "Trim", _ => { });
+
+        public static FavoriteAction TrimSet(SailGroup group) =>
+            Create(group, FavoriteActionKind.TrimSet, "Trim Set", _ => { });
+
+        public static FavoriteAction Secure(SailGroup group) =>
+            Create(group, FavoriteActionKind.Secure, "Secure", _ => { });
 
         private static FavoriteAction Create(SailGroup group, FavoriteActionKind kind, string label, Action<FavoriteAction> configure)
         {

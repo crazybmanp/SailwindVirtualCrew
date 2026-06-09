@@ -664,6 +664,26 @@ namespace SailwindVirtualCrew
             var command = GetOrCreateFavoriteActionCommand(action, group);
             if (command == null) return;
             command.trim = true;
+            command.secure = false;
+            command.trimSet = false;
+        }
+
+        public void SetFavoriteActionSecure(FavoriteAction action, SailGroup group)
+        {
+            var command = GetOrCreateFavoriteActionCommand(action, group);
+            if (command == null) return;
+            command.secure = true;
+            command.trim = false;
+            command.trimSet = false;
+        }
+
+        public void SetFavoriteActionTrimSet(FavoriteAction action, SailGroup group)
+        {
+            var command = GetOrCreateFavoriteActionCommand(action, group);
+            if (command == null) return;
+            command.trimSet = true;
+            command.trim = false;
+            command.secure = false;
         }
 
         public void ClearFavoriteActionGroup(FavoriteAction action, SailGroup group)
@@ -802,24 +822,14 @@ namespace SailwindVirtualCrew
                 }
             }
 
-            if (command.trim)
-                QueueFavoriteTrimRequests(group);
-        }
+            if (command.secure)
+                QueueSecureSails(group.GetMembers(AllSails));
 
-        private void QueueFavoriteTrimRequests(SailGroup group)
-        {
-            foreach (var sail in group.GetMembers(AllSails))
-            {
-                if (sail is SimpleSail simple)
-                    AddTrimRequest(new TrimRequest(simple));
-                else if (sail is DualSheetSail dual)
-                {
-                    if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Jib)
-                        AddJibTrimRequest(new JibTrimRequest(dual));
-                    else if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Square)
-                        AddSquareTrimRequest(new SquareTrimRequest(dual));
-                }
-            }
+            if (command.trim)
+                QueueTrimSails(group.GetMembers(AllSails), skipReefed: false);
+
+            if (command.trimSet)
+                QueueTrimSails(group.GetMembers(AllSails), skipReefed: true);
         }
 
         private static StandingOrderTargets FavoriteCommandToTargets(FavoriteActionGroupCommand command)
@@ -886,18 +896,15 @@ namespace SailwindVirtualCrew
                     break;
 
                 case FavoriteActionKind.Trim:
-                    foreach (var sail in group.GetMembers(AllSails))
-                    {
-                        if (sail is SimpleSail simple)
-                            AddTrimRequest(new TrimRequest(simple));
-                        else if (sail is DualSheetSail dual)
-                        {
-                            if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Jib)
-                                AddJibTrimRequest(new JibTrimRequest(dual));
-                            else if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Square)
-                                AddSquareTrimRequest(new SquareTrimRequest(dual));
-                        }
-                    }
+                    QueueTrimSails(group.GetMembers(AllSails), skipReefed: false);
+                    break;
+
+                case FavoriteActionKind.TrimSet:
+                    QueueTrimSails(group.GetMembers(AllSails), skipReefed: true);
+                    break;
+
+                case FavoriteActionKind.Secure:
+                    QueueSecureSails(group.GetMembers(AllSails));
                     break;
             }
         }
@@ -3858,13 +3865,16 @@ namespace SailwindVirtualCrew
                 CancelSleepRequest(sleep);
         }
 
-        private void QueueAutoTrimAllSails()
+        public void QueueTrimSails(System.Collections.Generic.IEnumerable<ICommonSailActions> sails, bool skipReefed)
         {
-            foreach (var sail in allSails)
+            foreach (var sail in sails)
             {
-                var realSail = sail.getRealSail();
-                if (realSail != null && realSail.currentUnroll < 0.05f)
-                    continue;
+                if (skipReefed)
+                {
+                    var realSail = sail.getRealSail();
+                    if (realSail != null && realSail.currentUnroll < 0.05f)
+                        continue;
+                }
 
                 if (sail is SimpleSail simple)
                 {
@@ -3876,6 +3886,40 @@ namespace SailwindVirtualCrew
                         AddJibTrimRequest(new JibTrimRequest(dual));
                     else if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Square)
                         AddSquareTrimRequest(new SquareTrimRequest(dual));
+                }
+            }
+        }
+
+        public void QueueAutoTrimAllSails() => QueueTrimSails(allSails, skipReefed: true);
+
+        public void QueueSecureSails(System.Collections.Generic.IEnumerable<ICommonSailActions> sails)
+        {
+            foreach (var sail in sails)
+            {
+                var realSail = sail.getRealSail();
+
+                if (sail is SimpleSail simple)
+                {
+                    AddWorkRequest(new WorkRequest(sail, "Secure Sheet", 
+                        new WinchTarget(simple.getSheetWinch(), 0.00f)));
+                }
+                else if (sail is DualSheetSail dual)
+                {
+                    if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Square)
+                    {
+                        AddWorkRequest(new WorkRequest(sail, "Secure Port Sheet", 
+                            new WinchTarget(dual.getPortSheetWinch(), 0.50f)));
+                        AddWorkRequest(new WorkRequest(sail, "Secure Starboard Sheet", 
+                            new WinchTarget(dual.getStarboardSheetWinch(), 0.50f)));
+                    }
+                    else if (dual.getSubtype() == DualSheetSail.DualSheetSailSubtype.Jib)
+                    {
+                        // Default to Let Fly (1.00f) to neutralize jib safely
+                        AddWorkRequest(new WorkRequest(sail, "Secure Port Sheet", 
+                            new WinchTarget(dual.getPortSheetWinch(), 1.00f)));
+                        AddWorkRequest(new WorkRequest(sail, "Secure Starboard Sheet", 
+                            new WinchTarget(dual.getStarboardSheetWinch(), 1.00f)));
+                    }
                 }
             }
         }
